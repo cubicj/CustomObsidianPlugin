@@ -30,6 +30,14 @@ export class EmbeddingEngine {
     return this.adapter.embed(texts, "document");
   }
 
+  async embedChunkedDocuments(inputs: string[][]): Promise<number[][]> {
+    if (this.adapter.embedContextualized) {
+      return this.adapter.embedContextualized(inputs, "document");
+    }
+    const flat = inputs.flat();
+    return this.adapter.embed(flat, "document");
+  }
+
   async embedQuery(query: string): Promise<number[]> {
     const result = await this.adapter.embed([query], "query");
     return result[0];
