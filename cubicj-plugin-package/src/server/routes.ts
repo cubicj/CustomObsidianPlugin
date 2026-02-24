@@ -58,6 +58,7 @@ export interface RouteContext {
   getStatus?: () => { vectorCount: number; model: string | null; dimension: number | null };
   getEmbeddingStats?: () => Promise<{ pendingFiles: number; staleFiles: number; unembeddedFiles: number }>;
   reEmbed?: (path?: string) => Promise<{ processed: number; skipped: number }>;
+  reloadPlugin?: () => void;
 }
 
 export function createHandler(bearerToken: string, ctx: RouteContext) {
@@ -105,6 +106,9 @@ export function createHandler(bearerToken: string, ctx: RouteContext) {
       }
       if (path === "/search/semantic" && method === "POST") {
         return await handleSearchSemantic(ctx, req, res);
+      }
+      if (path === "/plugin/reload" && method === "POST") {
+        return handleReload(ctx, res);
       }
       if (path === "/embedding/re-embed" && method === "POST") {
         return await handleReEmbed(ctx, req, res);
@@ -248,6 +252,12 @@ async function handleSearchSemantic(ctx: RouteContext, req: http.IncomingMessage
 
   const results = await ctx.searchSemantic(query, limit);
   sendJson(res, results);
+}
+
+function handleReload(ctx: RouteContext, res: http.ServerResponse) {
+  if (!ctx.reloadPlugin) return sendError(res, "Reload not available", 503);
+  sendJson(res, { ok: true, message: "Plugin will reload momentarily" });
+  setTimeout(() => ctx.reloadPlugin!(), 200);
 }
 
 async function handleReEmbed(ctx: RouteContext, req: http.IncomingMessage, res: http.ServerResponse) {

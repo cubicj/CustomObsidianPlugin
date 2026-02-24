@@ -238,5 +238,22 @@ server.tool(
   }
 );
 
+server.tool(
+  "reload_plugin",
+  "Reload the Obsidian plugin (disable then re-enable). " +
+    "Useful during development after rebuilding plugin code. " +
+    "Returns immediately; the plugin restarts ~200ms later. " +
+    "The HTTP server will be briefly unavailable during reload.",
+  {},
+  async () => {
+    try {
+      const result = await pluginFetch("/plugin/reload", { method: "POST" });
+      return textResult(result);
+    } catch (e) {
+      return errorResult(e);
+    }
+  }
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);

@@ -109,6 +109,11 @@ export default class CubicJPlugin extends Plugin {
         getEmbeddingStats: this.pipeline
           ? () => this.pipeline!.getEmbeddingStats()
           : undefined,
+        reloadPlugin: () => {
+          const plugins = (this.app as any).plugins;
+          const id = this.manifest.id;
+          plugins.disablePlugin(id).then(() => plugins.enablePlugin(id));
+        },
         reEmbed: this.pipeline
           ? async (path?: string) => {
               if (!path) return this.pipeline!.flushDirty();
