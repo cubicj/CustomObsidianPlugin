@@ -1,9 +1,11 @@
-import { Notice, Plugin } from "obsidian";
+import { Notice, Plugin, TFile } from "obsidian";
 import { PluginHttpServer } from "./server/http-server";
 import { createHandler, RouteContext } from "./server/routes";
 import { EmbeddingEngine } from "./embedding/engine";
 import { LocalEmbeddingAdapter } from "./embedding/local-adapter";
 import { ApiEmbeddingAdapter } from "./embedding/api-adapter";
+import { VectorStore } from "./embedding/vector-store";
+import { EmbeddingPipeline } from "./embedding/pipeline";
 import { CubicJSettingTab } from "./settings-tab";
 
 function generateToken(): string {
@@ -55,6 +57,8 @@ export default class CubicJPlugin extends Plugin {
   settings: CubicJSettings;
   httpServer: PluginHttpServer;
   embeddingEngine: EmbeddingEngine | null = null;
+  vectorStore: VectorStore;
+  pipeline: EmbeddingPipeline | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -64,10 +68,13 @@ export default class CubicJPlugin extends Plugin {
       await this.saveSettings();
     }
 
-    this.httpServer = new PluginHttpServer();
-    await this.startServer();
+    this.vectorStore = new VectorStore();
+    await this.vectorStore.load(this.app.vault);
 
-    this.initEmbeddingEngine();
+    this.httpServer = new PluginHttpServer();
+
+    await this.initEmbeddingEngine();
+    await this.startServer();
 
     this.addSettingTab(new CubicJSettingTab(this.app, this));
     console.log("CubicJ Plugin Package loaded");
@@ -81,7 +88,15 @@ export default class CubicJPlugin extends Plugin {
 
   async startServer() {
     try {
-      const ctx: RouteContext = { app: this.app };
+      const ctx: RouteContext = {
+        app: this.app,
+        searchSemantic: this.embeddingEngine
+          ? async (query: string, limit: number) => {
+              const vec = await this.embeddingEngine!.embedQuery(query);
+              return this.vectorStore.search(vec, limit);
+            }
+          : undefined,
+      };
       const handler = createHandler(this.settings.server.bearerToken, ctx);
       await this.httpServer.start(this.settings.server.port, handler);
       console.log(`CubicJ HTTP server listening on port ${this.settings.server.port}`);
@@ -101,10 +116,45 @@ export default class CubicJPlugin extends Plugin {
       this.embeddingEngine = new EmbeddingEngine(adapter);
       await this.embeddingEngine.load();
       console.log(`Embedding engine loaded (${es.mode})`);
+
+      this.pipeline = new EmbeddingPipeline(this.embeddingEngine, this.vectorStore, this.app.vault);
+      this.registerVaultEvents();
+      this.pipeline.embedAll();
     } catch (e) {
       console.error("Failed to load embedding engine:", e);
       new Notice(`Embedding engine failed to load: ${e}`);
     }
+  }
+
+  private registerVaultEvents() {
+    if (!this.pipeline) return;
+
+    const debouncedEmbed = this.pipeline.createDebouncedEmbed();
+
+    this.registerEvent(
+      this.app.vault.on("modify", (file) => {
+        if (file instanceof TFile && file.extension === "md") {
+          debouncedEmbed(file);
+        }
+      })
+    );
+
+    this.registerEvent(
+      this.app.vault.on("delete", (file) => {
+        if (file instanceof TFile) {
+          this.pipeline!.removeFile(file.path);
+        }
+      })
+    );
+
+    this.registerEvent(
+      this.app.vault.on("rename", (file, oldPath) => {
+        this.pipeline!.removeFile(oldPath);
+        if (file instanceof TFile && file.extension === "md") {
+          this.pipeline!.embedFile(file);
+        }
+      })
+    );
   }
 
   async loadSettings() {
