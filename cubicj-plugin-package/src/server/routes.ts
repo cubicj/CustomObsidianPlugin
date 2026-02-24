@@ -54,28 +54,28 @@ export function createHandler(bearerToken: string, ctx: RouteContext) {
 
     try {
       if (path === "/vault/files" && method === "GET") {
-        return handleListFiles(ctx, res);
+        return await handleListFiles(ctx, res);
       }
       if (path === "/vault/file" && method === "GET") {
-        return handleGetFile(ctx, req, res);
+        return await handleGetFile(ctx, req, res);
       }
       if (path === "/vault/file" && method === "POST") {
-        return handleCreateFile(ctx, req, res);
+        return await handleCreateFile(ctx, req, res);
       }
       if (path === "/vault/file" && method === "PUT") {
-        return handleUpdateFile(ctx, req, res);
+        return await handleUpdateFile(ctx, req, res);
       }
       if (path === "/vault/file" && method === "DELETE") {
-        return handleDeleteFile(ctx, req, res);
+        return await handleDeleteFile(ctx, req, res);
       }
       if (path === "/vault/active" && method === "GET") {
-        return handleGetActive(ctx, res);
+        return await handleGetActive(ctx, res);
       }
       if (path === "/search/keyword" && method === "POST") {
-        return handleSearchKeyword(ctx, req, res);
+        return await handleSearchKeyword(ctx, req, res);
       }
       if (path === "/search/semantic" && method === "POST") {
-        return handleSearchSemantic(ctx, req, res);
+        return await handleSearchSemantic(ctx, req, res);
       }
       sendError(res, "Not found", 404);
     } catch (e) {
@@ -112,6 +112,11 @@ async function handleCreateFile(ctx: RouteContext, req: http.IncomingMessage, re
 
   const existing = ctx.app.vault.getAbstractFileByPath(filePath);
   if (existing) return sendError(res, "File already exists", 409);
+
+  const dir = filePath.substring(0, filePath.lastIndexOf("/"));
+  if (dir && !ctx.app.vault.getAbstractFileByPath(dir)) {
+    await ctx.app.vault.createFolder(dir);
+  }
 
   const file = await ctx.app.vault.create(filePath, content || "");
   sendJson(res, { path: file.path }, 201);
