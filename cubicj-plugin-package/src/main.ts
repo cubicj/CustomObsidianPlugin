@@ -1,4 +1,5 @@
 import { Plugin } from "obsidian";
+import { enableNoAutoFocus, disableNoAutoFocus } from "./modules/no-auto-focus";
 
 interface CubicJSettings {}
 
@@ -9,10 +10,12 @@ export default class CubicJPlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
+    enableNoAutoFocus();
     console.log("CubicJ Plugin Package loaded");
   }
 
   async onunload() {
+    disableNoAutoFocus();
     console.log("CubicJ Plugin Package unloaded");
   }
 
