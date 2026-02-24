@@ -10,11 +10,24 @@ function sendError(res: http.ServerResponse, message: string, status = 400) {
   sendJson(res, { error: message }, status);
 }
 
+function parseCharset(contentType: string | undefined): string {
+  if (!contentType) return "utf-8";
+  const match = contentType.match(/charset=([^\s;]+)/i);
+  return match ? match[1].toLowerCase() : "utf-8";
+}
+
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     req.on("data", (chunk) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString()));
+    req.on("end", () => {
+      const charset = parseCharset(req.headers["content-type"]);
+      try {
+        resolve(new TextDecoder(charset).decode(Buffer.concat(chunks)));
+      } catch {
+        resolve(Buffer.concat(chunks).toString("utf-8"));
+      }
+    });
     req.on("error", reject);
   });
 }
@@ -29,6 +42,7 @@ function getQueryParam(url: string, key: string): string | null {
 export interface RouteContext {
   app: App;
   searchSemantic?: (query: string, limit: number) => Promise<Array<{ path: string; score: number }>>;
+  getStatus?: () => { vectorCount: number; model: string | null; dimension: number | null };
 }
 
 export function createHandler(bearerToken: string, ctx: RouteContext) {
@@ -76,6 +90,9 @@ export function createHandler(bearerToken: string, ctx: RouteContext) {
       }
       if (path === "/search/semantic" && method === "POST") {
         return await handleSearchSemantic(ctx, req, res);
+      }
+      if (path === "/status" && method === "GET") {
+        return handleStatus(ctx, res);
       }
       sendError(res, "Not found", 404);
     } catch (e) {
@@ -185,4 +202,17 @@ async function handleSearchSemantic(ctx: RouteContext, req: http.IncomingMessage
 
   const results = await ctx.searchSemantic(query, limit);
   sendJson(res, results);
+}
+
+function handleStatus(ctx: RouteContext, res: http.ServerResponse) {
+  const fileCount = ctx.app.vault.getMarkdownFiles().length;
+  const status = ctx.getStatus?.() ?? { vectorCount: 0, model: null, dimension: null };
+  sendJson(res, {
+    ok: true,
+    vault: { fileCount },
+    embedding: {
+      available: !!ctx.searchSemantic,
+      ...status,
+    },
+  });
 }

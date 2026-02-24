@@ -26,7 +26,6 @@ const context = await esbuild.context({
     "electron",
     "@codemirror/*",
     "@lezer/*",
-    "onnxruntime-node",
     "sharp",
     ...builtins.builtinModules,
   ],

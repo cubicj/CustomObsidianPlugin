@@ -99,6 +99,11 @@ export default class CubicJPlugin extends Plugin {
               return this.vectorStore.search(vec, limit);
             }
           : undefined,
+        getStatus: () => ({
+          vectorCount: this.vectorStore.size,
+          model: this.vectorStore.getModel(),
+          dimension: this.vectorStore.getDimension(),
+        }),
       };
       const handler = createHandler(this.settings.server.bearerToken, ctx);
       await this.httpServer.start(this.settings.server.port, handler);

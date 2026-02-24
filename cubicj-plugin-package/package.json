@@ -12,7 +12,5 @@
     "obsidian": "latest",
     "typescript": "^5.0.0"
   },
-  "dependencies": {
-    "@huggingface/transformers": "^3.8.1"
-  }
+  "dependencies": {}
 }
