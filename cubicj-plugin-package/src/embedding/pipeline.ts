@@ -1,4 +1,4 @@
-import { Notice, TFile, Vault, debounce } from "obsidian";
+import { Notice, TFile, Vault } from "obsidian";
 import { EmbeddingEngine } from "./engine";
 import { VectorStore } from "./vector-store";
 import { chunkMarkdown, Chunk } from "./chunker";
@@ -30,6 +30,7 @@ interface PendingDocument {
 
 export class EmbeddingPipeline {
   private isRunning = false;
+  private dirtyPaths: Set<string> = new Set();
 
   constructor(
     private engine: EmbeddingEngine,
@@ -169,10 +170,139 @@ export class EmbeddingPipeline {
     this.store.save(this.vault);
   }
 
-  createDebouncedEmbed() {
-    return debounce((file: TFile) => {
-      this.embedFile(file);
-    }, 5000, true);
+  markDirty(path: string) {
+    this.dirtyPaths.add(path);
+  }
+
+  get pendingCount(): number {
+    return this.dirtyPaths.size;
+  }
+
+  async flushDirty(): Promise<{ processed: number; skipped: number }> {
+    if (this.isRunning || this.dirtyPaths.size === 0) return { processed: 0, skipped: 0 };
+    this.isRunning = true;
+
+    const paths = [...this.dirtyPaths];
+    this.dirtyPaths.clear();
+
+    const pending: PendingDocument[] = [];
+    let skipped = 0;
+
+    for (const p of paths) {
+      const file = this.vault.getAbstractFileByPath(p);
+      if (!(file instanceof TFile) || file.extension !== "md") continue;
+
+      const content = await this.vault.cachedRead(file);
+      const hash = contentHash(content);
+      if (!this.store.needsUpdateByPrefix(p, hash)) {
+        skipped++;
+        continue;
+      }
+      const chunks = chunkMarkdown(p, content);
+      pending.push({ path: p, hash, chunks, tokens: estimateTokens(content) });
+    }
+
+    const batches = this.buildBatches(pending);
+    let processed = 0;
+
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      try {
+        const vecs = await this.embedBatchWithRetry(batch);
+        let vecIdx = 0;
+        for (const doc of batch) {
+          this.store.deleteByPrefix(doc.path);
+          for (const chunk of doc.chunks) {
+            this.store.set(chunk.key, vecs[vecIdx++], doc.hash);
+          }
+        }
+        processed += batch.length;
+      } catch (e: any) {
+        const msg = e?.message ?? "";
+        if (msg.includes("401") || msg.includes("403") || msg.includes("Unauthorized")) {
+          new Notice("Embedding aborted: invalid API key");
+          this.isRunning = false;
+          return { processed, skipped };
+        }
+        console.error(`Failed to embed batch ${i + 1}/${batches.length}:`, e);
+      }
+    }
+
+    await this.store.save(this.vault);
+    this.isRunning = false;
+    if (processed > 0) new Notice(`Embedding: ${processed} files updated, ${skipped} unchanged`);
+    return { processed, skipped };
+  }
+
+  async getEmbeddingStats(): Promise<{ pendingFiles: number; staleFiles: number; unembeddedFiles: number }> {
+    const files = this.vault.getMarkdownFiles();
+    let staleFiles = 0;
+    let unembeddedFiles = 0;
+
+    for (const file of files) {
+      const content = await this.vault.cachedRead(file);
+      const hash = contentHash(content);
+      const hasVectors = this.store.has(file.path) ||
+        [...this.store.entries.keys()].some(k => k.startsWith(file.path + "#"));
+      if (!hasVectors) {
+        unembeddedFiles++;
+      } else if (this.store.needsUpdateByPrefix(file.path, hash)) {
+        staleFiles++;
+      }
+    }
+
+    return { pendingFiles: this.dirtyPaths.size, staleFiles, unembeddedFiles };
+  }
+
+  async embedByPrefix(prefix: string): Promise<{ processed: number; skipped: number }> {
+    if (this.isRunning) return { processed: 0, skipped: 0 };
+
+    const files = this.vault.getMarkdownFiles().filter(f => f.path.startsWith(prefix));
+    if (files.length === 0) return { processed: 0, skipped: 0 };
+
+    this.isRunning = true;
+    const pending: PendingDocument[] = [];
+    let skipped = 0;
+
+    for (const file of files) {
+      const content = await this.vault.cachedRead(file);
+      const hash = contentHash(content);
+      if (!this.store.needsUpdateByPrefix(file.path, hash)) {
+        skipped++;
+        continue;
+      }
+      const chunks = chunkMarkdown(file.path, content);
+      pending.push({ path: file.path, hash, chunks, tokens: estimateTokens(content) });
+    }
+
+    const batches = this.buildBatches(pending);
+    let processed = 0;
+
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      try {
+        const vecs = await this.embedBatchWithRetry(batch);
+        let vecIdx = 0;
+        for (const doc of batch) {
+          this.store.deleteByPrefix(doc.path);
+          for (const chunk of doc.chunks) {
+            this.store.set(chunk.key, vecs[vecIdx++], doc.hash);
+          }
+        }
+        processed += batch.length;
+      } catch (e: any) {
+        const msg = e?.message ?? "";
+        if (msg.includes("401") || msg.includes("403") || msg.includes("Unauthorized")) {
+          new Notice("Embedding aborted: invalid API key");
+          break;
+        }
+        console.error(`Failed to embed batch ${i + 1}/${batches.length}:`, e);
+      }
+    }
+
+    await this.store.save(this.vault);
+    this.isRunning = false;
+    return { processed, skipped };
   }
 }
 
