@@ -1,19 +1,13 @@
-import { App, Notice, Vault } from "obsidian";
+import { App, Notice } from "obsidian";
 
 export interface FontSettings {
   fontFolder: string;
   fontFile: string;
-  forceMode: boolean;
-  customCssMode: boolean;
-  customCss: string;
 }
 
 export const DEFAULT_FONT_SETTINGS: FontSettings = {
   fontFolder: "",
   fontFile: "None",
-  forceMode: false,
-  customCssMode: false,
-  customCss: "",
 };
 
 const FONT_BASE64_ID = "cubicj-font-base64";
@@ -51,17 +45,13 @@ function getDefaultCss(fontFamily: string): string {
 `;
 }
 
-function applyCss(css: string, id: string, appendMode = false) {
+function applyCss(css: string, id: string) {
   const existing = document.getElementById(id);
-  if (existing && appendMode) {
-    existing.innerHTML += css;
-  } else {
-    const style = document.createElement("style");
-    style.innerHTML = css;
-    document.head.appendChild(style);
-    if (existing) existing.remove();
-    style.id = id;
-  }
+  const style = document.createElement("style");
+  style.innerHTML = css;
+  style.id = id;
+  document.head.appendChild(style);
+  if (existing) existing.remove();
 }
 
 function removeCss(id: string) {
@@ -73,7 +63,7 @@ export class FontLoader {
   private pluginFolder: string;
 
   constructor(private app: App) {
-    this.pluginFolder = `${app.vault.configDir}/plugins/cubicj-plugin-package`;
+    this.pluginFolder = `${app.vault.configDir}/plugins/cubicj-core`;
   }
 
   async load(settings: FontSettings) {
@@ -85,19 +75,7 @@ export class FontLoader {
     }
 
     try {
-      if (fontFile === "all") {
-        applyCss("", FONT_BASE64_ID);
-        const folder = settings.fontFolder;
-        const listing = await this.app.vault.adapter.list(folder);
-        for (const file of listing.files) {
-          const name = file.replace(folder, "");
-          if (!name.startsWith(".")) {
-            await this.processFont(name, settings, true);
-          }
-        }
-      } else {
-        await this.processFont(fontFile, settings, false);
-      }
+      await this.processFont(fontFile, settings);
     } catch (e) {
       new Notice(String(e));
     }
@@ -108,7 +86,7 @@ export class FontLoader {
     removeCss(FONT_GENERAL_ID);
   }
 
-  private async processFont(fileName: string, settings: FontSettings, appendMode: boolean) {
+  private async processFont(fileName: string, settings: FontSettings) {
     const cssCachePath = `${this.pluginFolder}/${fileName.toLowerCase().replace(".", "_")}.css`;
 
     if (!(await this.app.vault.adapter.exists(cssCachePath))) {
@@ -116,24 +94,13 @@ export class FontLoader {
     }
 
     const content = await this.app.vault.adapter.read(cssCachePath);
-    applyCss(content, FONT_BASE64_ID, appendMode);
-    this.applyCssRules(fileName, settings);
+    applyCss(content, FONT_BASE64_ID);
+    this.applyCssRules(fileName);
   }
 
-  private applyCssRules(fileName: string, settings: FontSettings) {
+  private applyCssRules(fileName: string) {
     const fontFamily = fileName.split(".")[0].toLowerCase();
-    let css = "";
-
-    if (settings.customCssMode) {
-      css = settings.customCss;
-    } else {
-      css = getDefaultCss(fontFamily);
-    }
-
-    if (settings.forceMode) {
-      css += `\n* { font-family: '${fontFamily}' !important; }\n`;
-    }
-
+    const css = getDefaultCss(fontFamily) + `\n* { font-family: '${fontFamily}' !important; }\n`;
     applyCss(css, FONT_GENERAL_ID);
   }
 

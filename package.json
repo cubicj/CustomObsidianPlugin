@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "workspaces": ["cubicj-core", "cubicj-plugin-package"],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "build:core": "npm run build -w cubicj-core",
+    "build:package": "npm run build -w cubicj-plugin-package",
+    "dev:core": "npm run dev -w cubicj-core",
+    "dev:package": "npm run dev -w cubicj-plugin-package"
+  }
+}

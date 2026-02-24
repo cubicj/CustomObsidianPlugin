@@ -7,6 +7,12 @@ export function enableNoAutoFocus() {
   MarkdownView.prototype.setEphemeralState = function (state: any) {
     if (originalSetEphemeralState) {
       originalSetEphemeralState.call(this, { ...state, focus: false });
+      requestAnimationFrame(() => {
+        const cm = (this as any).editor?.cm;
+        if (cm?.hasFocus) {
+          cm.contentDOM.blur();
+        }
+      });
     }
   };
 }
