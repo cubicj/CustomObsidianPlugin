@@ -10,6 +10,7 @@ interface VectorEntry {
 
 interface StoreData {
   dimension?: number;
+  model?: string;
   entries: Record<string, VectorEntry>;
 }
 
@@ -18,6 +19,7 @@ const STORE_PATH = ".obsidian/plugins/cubicj-plugin-package/vectors.json";
 export class VectorStore {
   private entries: Map<string, VectorEntry> = new Map();
   private dimension: number | null = null;
+  private model: string | null = null;
 
   async load(vault: Vault): Promise<void> {
     try {
@@ -26,6 +28,7 @@ export class VectorStore {
         const data: StoreData = JSON.parse(raw);
         this.entries = new Map(Object.entries(data.entries));
         this.dimension = data.dimension ?? null;
+        this.model = data.model ?? null;
       }
     } catch (e) {
       console.error("Failed to load vector store:", e);
@@ -36,6 +39,7 @@ export class VectorStore {
   async save(vault: Vault): Promise<void> {
     const data: StoreData = {
       dimension: this.dimension ?? undefined,
+      model: this.model ?? undefined,
       entries: Object.fromEntries(this.entries),
     };
     await vault.adapter.write(STORE_PATH, JSON.stringify(data));
@@ -47,6 +51,14 @@ export class VectorStore {
 
   setDimension(dim: number): void {
     this.dimension = dim;
+  }
+
+  getModel(): string | null {
+    return this.model;
+  }
+
+  setModel(model: string): void {
+    this.model = model;
   }
 
   set(path: string, vec: number[], hash: string): void {

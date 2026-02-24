@@ -2,11 +2,16 @@ import { Notice, Plugin, TFile } from "obsidian";
 import { PluginHttpServer } from "./server/http-server";
 import { createHandler, RouteContext } from "./server/routes";
 import { EmbeddingEngine } from "./embedding/engine";
-import { LocalEmbeddingAdapter } from "./embedding/local-adapter";
-import { ApiEmbeddingAdapter } from "./embedding/api-adapter";
+import { ApiEmbeddingAdapter, ContextualizedApiAdapter } from "./embedding/api-adapter";
 import { VectorStore } from "./embedding/vector-store";
 import { EmbeddingPipeline } from "./embedding/pipeline";
 import { CubicJSettingTab } from "./settings-tab";
+
+function getTokenBudget(model: string): number {
+  if (model.includes("lite")) return 1_000_000;
+  if (model.includes("large") || model.includes("code") || model.includes("finance") || model.includes("law") || model.includes("context")) return 120_000;
+  return 320_000;
+}
 
 function generateToken(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -28,19 +33,17 @@ export const DEFAULT_SERVER_SETTINGS: ServerSettings = {
 };
 
 export interface EmbeddingSettings {
-  mode: "local" | "api";
-  localModel: string;
   apiEndpoint: string;
   apiKey: string;
   apiModel: string;
+  outputDimension: number;
 }
 
 export const DEFAULT_EMBEDDING_SETTINGS: EmbeddingSettings = {
-  mode: "local",
-  localModel: "Xenova/all-MiniLM-L6-v2",
-  apiEndpoint: "https://api.openai.com/v1/embeddings",
+  apiEndpoint: "https://api.voyageai.com/v1/contextualizedembeddings",
   apiKey: "",
-  apiModel: "text-embedding-3-small",
+  apiModel: "voyage-context-3",
+  outputDimension: 1024,
 };
 
 export interface CubicJSettings {
@@ -106,21 +109,41 @@ export default class CubicJPlugin extends Plugin {
   }
 
   async initEmbeddingEngine() {
-    try {
-      const es = this.settings.embedding;
-      const adapter =
-        es.mode === "local"
-          ? new LocalEmbeddingAdapter(es.localModel)
-          : new ApiEmbeddingAdapter(es.apiEndpoint, es.apiKey, es.apiModel);
+    const es = this.settings.embedding;
+    if (!es.apiKey) {
+      console.log("Embedding skipped: no API key configured");
+      return;
+    }
 
+    try {
+      await this.embeddingEngine?.unload();
+
+      const isContextualized = es.apiEndpoint.includes("contextualizedembeddings");
+      const adapter = isContextualized
+        ? new ContextualizedApiAdapter(es.apiEndpoint, es.apiKey, es.apiModel, es.outputDimension)
+        : new ApiEmbeddingAdapter(es.apiEndpoint, es.apiKey, es.apiModel, es.outputDimension);
       this.embeddingEngine = new EmbeddingEngine(adapter);
       await this.embeddingEngine.load();
-      console.log(`Embedding engine loaded (${es.mode})`);
+      console.log("Embedding engine loaded");
 
-      this.pipeline = new EmbeddingPipeline(this.embeddingEngine, this.vectorStore, this.app.vault);
+      const tokenBudget = getTokenBudget(es.apiModel);
+      this.pipeline = new EmbeddingPipeline(this.embeddingEngine, this.vectorStore, this.app.vault, tokenBudget);
+
+      const dimensionChanged = this.vectorStore.getDimension() !== null
+        && this.vectorStore.getDimension() !== es.outputDimension;
+      const modelChanged = this.vectorStore.getModel() !== null
+        && this.vectorStore.getModel() !== es.apiModel;
+      if (dimensionChanged || modelChanged) {
+        new Notice("Embedding config changed — clearing vectors for re-embed");
+        this.vectorStore.clear();
+        await this.vectorStore.save(this.app.vault);
+      }
+      this.vectorStore.setDimension(es.outputDimension);
+      this.vectorStore.setModel(es.apiModel);
       this.registerVaultEvents();
-      this.pipeline.embedAll();
     } catch (e) {
+      this.embeddingEngine = null;
+      this.pipeline = null;
       console.error("Failed to load embedding engine:", e);
       new Notice(`Embedding engine failed to load: ${e}`);
     }
