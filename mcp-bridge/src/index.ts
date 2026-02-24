@@ -62,7 +62,7 @@ server.tool(
     "Best for concept/topic searches. For exact text matching, use search_keyword instead.",
   {
     query: z.string().describe("Natural language search query (Korean or English)"),
-    limit: z.number().optional().describe("Max results to return (default: 10, max recommended: 50)"),
+    limit: z.number().int().min(1).max(50).optional().describe("Max results to return (default: 10, max: 50)"),
   },
   async ({ query, limit }) => {
     try {
@@ -85,7 +85,7 @@ server.tool(
     "For conceptual/semantic searches, use search_semantic instead.",
   {
     query: z.string().describe("Keyword or phrase to search for (case-insensitive substring match)"),
-    limit: z.number().optional().describe("Max files to return (default: 20)"),
+    limit: z.number().int().min(1).max(100).optional().describe("Max files to return (default: 20, max: 100)"),
   },
   async ({ query, limit }) => {
     try {
@@ -102,9 +102,10 @@ server.tool(
 
 server.tool(
   "list_files",
-  "List all markdown files in the Obsidian vault. " +
-    "Returns [{path, name, size, mtime}] for every .md file. " +
-    "Use to discover available notes before reading or searching.",
+  "List all markdown files in the Obsidian vault as a tree structure. " +
+    "Returns nested JSON where top-level keys are folders, each containing an array. " +
+    "Strings in the array are files, objects with a single key are subfolders. " +
+    "Use to discover available notes and vault organization before reading or searching.",
   {},
   async () => {
     try {

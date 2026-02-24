@@ -39,6 +39,19 @@ function getQueryParam(url: string, key: string): string | null {
   return params.get(key);
 }
 
+async function safeReadJson(req: http.IncomingMessage): Promise<Record<string, unknown>> {
+  const raw = await readBody(req);
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("Expected JSON object");
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    throw new Error("Invalid JSON body");
+  }
+}
+
 export interface RouteContext {
   app: App;
   searchSemantic?: (query: string, limit: number) => Promise<Array<{ path: string; score: number }>>;
@@ -102,13 +115,33 @@ export function createHandler(bearerToken: string, ctx: RouteContext) {
 }
 
 function handleListFiles(ctx: RouteContext, res: http.ServerResponse) {
-  const files = ctx.app.vault.getMarkdownFiles().map((f) => ({
-    path: f.path,
-    name: f.name,
-    size: f.stat.size,
-    mtime: f.stat.mtime,
-  }));
-  sendJson(res, files);
+  interface DirNode { files: string[]; dirs: Record<string, DirNode>; }
+  const root: DirNode = { files: [], dirs: {} };
+
+  for (const file of ctx.app.vault.getMarkdownFiles()) {
+    const parts = file.path.split("/");
+    let node = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (!node.dirs[parts[i]]) node.dirs[parts[i]] = { files: [], dirs: {} };
+      node = node.dirs[parts[i]];
+    }
+    node.files.push(parts[parts.length - 1]);
+  }
+
+  function toTree(node: DirNode): (string | Record<string, unknown>)[] {
+    const result: (string | Record<string, unknown>)[] = [...node.files];
+    for (const [name, child] of Object.entries(node.dirs)) {
+      result.push({ [name]: toTree(child) });
+    }
+    return result;
+  }
+
+  const output: Record<string, unknown> = {};
+  for (const [name, child] of Object.entries(root.dirs)) {
+    output[name] = toTree(child);
+  }
+  if (root.files.length > 0) output["_root"] = root.files;
+  sendJson(res, output);
 }
 
 async function handleGetFile(ctx: RouteContext, req: http.IncomingMessage, res: http.ServerResponse) {
@@ -123,19 +156,26 @@ async function handleGetFile(ctx: RouteContext, req: http.IncomingMessage, res: 
 }
 
 async function handleCreateFile(ctx: RouteContext, req: http.IncomingMessage, res: http.ServerResponse) {
-  const body = JSON.parse(await readBody(req));
+  const body = await safeReadJson(req);
   const { path: filePath, content } = body;
-  if (!filePath) return sendError(res, "Missing path");
+  if (!filePath || typeof filePath !== "string") return sendError(res, "Missing path");
 
   const existing = ctx.app.vault.getAbstractFileByPath(filePath);
   if (existing) return sendError(res, "File already exists", 409);
 
   const dir = filePath.substring(0, filePath.lastIndexOf("/"));
-  if (dir && !ctx.app.vault.getAbstractFileByPath(dir)) {
-    await ctx.app.vault.createFolder(dir);
+  if (dir) {
+    const parts = dir.split("/");
+    let current = "";
+    for (const part of parts) {
+      current = current ? `${current}/${part}` : part;
+      if (!ctx.app.vault.getAbstractFileByPath(current)) {
+        await ctx.app.vault.createFolder(current);
+      }
+    }
   }
 
-  const file = await ctx.app.vault.create(filePath, content || "");
+  const file = await ctx.app.vault.create(filePath, typeof content === "string" ? content : "");
   sendJson(res, { path: file.path }, 201);
 }
 
@@ -146,8 +186,9 @@ async function handleUpdateFile(ctx: RouteContext, req: http.IncomingMessage, re
   const file = ctx.app.vault.getAbstractFileByPath(filePath);
   if (!(file instanceof TFile)) return sendError(res, "File not found", 404);
 
-  const body = JSON.parse(await readBody(req));
-  await ctx.app.vault.modify(file, body.content || "");
+  const body = await safeReadJson(req);
+  if (typeof body.content !== "string") return sendError(res, "Missing content field");
+  await ctx.app.vault.modify(file, body.content);
   sendJson(res, { path: file.path });
 }
 
@@ -169,7 +210,7 @@ function handleGetActive(ctx: RouteContext, res: http.ServerResponse) {
 }
 
 async function handleSearchKeyword(ctx: RouteContext, req: http.IncomingMessage, res: http.ServerResponse) {
-  const body = JSON.parse(await readBody(req));
+  const body = await safeReadJson(req);
   const { query, limit = 20 } = body;
   if (!query) return sendError(res, "Missing query");
 
@@ -196,7 +237,7 @@ async function handleSearchSemantic(ctx: RouteContext, req: http.IncomingMessage
   if (!ctx.searchSemantic) {
     return sendError(res, "Semantic search not available", 503);
   }
-  const body = JSON.parse(await readBody(req));
+  const body = await safeReadJson(req);
   const { query, limit = 10 } = body;
   if (!query) return sendError(res, "Missing query");
 
