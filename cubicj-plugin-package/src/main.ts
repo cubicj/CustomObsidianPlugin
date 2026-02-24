@@ -62,6 +62,7 @@ export default class CubicJPlugin extends Plugin {
   embeddingEngine: EmbeddingEngine | null = null;
   vectorStore: VectorStore;
   pipeline: EmbeddingPipeline | null = null;
+  private flushInterval: ReturnType<typeof setInterval> | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -84,6 +85,7 @@ export default class CubicJPlugin extends Plugin {
   }
 
   async onunload() {
+    if (this.flushInterval) clearInterval(this.flushInterval);
     await this.httpServer?.stop();
     await this.embeddingEngine?.unload();
     console.log("CubicJ Plugin Package unloaded");
@@ -157,12 +159,18 @@ export default class CubicJPlugin extends Plugin {
   private registerVaultEvents() {
     if (!this.pipeline) return;
 
-    const debouncedEmbed = this.pipeline.createDebouncedEmbed();
-
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
         if (file instanceof TFile && file.extension === "md") {
-          debouncedEmbed(file);
+          this.pipeline!.markDirty(file.path);
+        }
+      })
+    );
+
+    this.registerEvent(
+      this.app.vault.on("create", (file) => {
+        if (file instanceof TFile && file.extension === "md") {
+          this.pipeline!.markDirty(file.path);
         }
       })
     );
@@ -179,10 +187,14 @@ export default class CubicJPlugin extends Plugin {
       this.app.vault.on("rename", (file, oldPath) => {
         this.pipeline!.removeFile(oldPath);
         if (file instanceof TFile && file.extension === "md") {
-          this.pipeline!.embedFile(file);
+          this.pipeline!.markDirty(file.path);
         }
       })
     );
+
+    this.flushInterval = setInterval(() => {
+      this.pipeline?.flushDirty();
+    }, 30 * 60 * 1000);
   }
 
   async loadSettings() {
