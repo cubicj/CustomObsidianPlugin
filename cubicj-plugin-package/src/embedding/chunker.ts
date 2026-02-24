@@ -22,7 +22,7 @@ export function chunkMarkdown(filePath: string, text: string): Chunk[] {
     if (match) {
       flush();
       currentHeading = match[2].trim();
-      currentLines = [];
+      currentLines = [line];
     } else {
       currentLines.push(line);
     }

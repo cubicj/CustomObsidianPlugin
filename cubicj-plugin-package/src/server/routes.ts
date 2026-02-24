@@ -2,7 +2,7 @@ import * as http from "http";
 import { App, TFile } from "obsidian";
 
 function sendJson(res: http.ServerResponse, data: unknown, status = 200) {
-  res.writeHead(status, { "Content-Type": "application/json" });
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(data));
 }
 
