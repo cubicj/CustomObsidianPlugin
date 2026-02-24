@@ -56,6 +56,8 @@ export interface RouteContext {
   app: App;
   searchSemantic?: (query: string, limit: number) => Promise<Array<{ path: string; score: number }>>;
   getStatus?: () => { vectorCount: number; model: string | null; dimension: number | null };
+  getEmbeddingStats?: () => Promise<{ pendingFiles: number; staleFiles: number; unembeddedFiles: number }>;
+  reEmbed?: (path?: string) => Promise<{ processed: number; skipped: number }>;
 }
 
 export function createHandler(bearerToken: string, ctx: RouteContext) {
@@ -104,8 +106,11 @@ export function createHandler(bearerToken: string, ctx: RouteContext) {
       if (path === "/search/semantic" && method === "POST") {
         return await handleSearchSemantic(ctx, req, res);
       }
+      if (path === "/embedding/re-embed" && method === "POST") {
+        return await handleReEmbed(ctx, req, res);
+      }
       if (path === "/status" && method === "GET") {
-        return handleStatus(ctx, res);
+        return await handleStatus(ctx, res);
       }
       sendError(res, "Not found", 404);
     } catch (e) {
@@ -245,15 +250,27 @@ async function handleSearchSemantic(ctx: RouteContext, req: http.IncomingMessage
   sendJson(res, results);
 }
 
-function handleStatus(ctx: RouteContext, res: http.ServerResponse) {
+async function handleReEmbed(ctx: RouteContext, req: http.IncomingMessage, res: http.ServerResponse) {
+  if (!ctx.reEmbed) return sendError(res, "Embedding not available", 503);
+
+  const body = await safeReadJson(req).catch(() => ({}));
+  const path = typeof (body as any).path === "string" ? (body as any).path : undefined;
+
+  const result = await ctx.reEmbed(path);
+  sendJson(res, result);
+}
+
+async function handleStatus(ctx: RouteContext, res: http.ServerResponse) {
   const fileCount = ctx.app.vault.getMarkdownFiles().length;
   const status = ctx.getStatus?.() ?? { vectorCount: 0, model: null, dimension: null };
+  const stats = await ctx.getEmbeddingStats?.() ?? { pendingFiles: 0, staleFiles: 0, unembeddedFiles: 0 };
   sendJson(res, {
     ok: true,
     vault: { fileCount },
     embedding: {
       available: !!ctx.searchSemantic,
       ...status,
+      ...stats,
     },
   });
 }

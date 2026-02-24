@@ -106,6 +106,17 @@ export default class CubicJPlugin extends Plugin {
           model: this.vectorStore.getModel(),
           dimension: this.vectorStore.getDimension(),
         }),
+        getEmbeddingStats: this.pipeline
+          ? () => this.pipeline!.getEmbeddingStats()
+          : undefined,
+        reEmbed: this.pipeline
+          ? async (path?: string) => {
+              if (!path) return this.pipeline!.flushDirty();
+              const file = this.app.vault.getAbstractFileByPath(path);
+              if (file instanceof TFile) return this.pipeline!.embedFile(file).then(() => ({ processed: 1, skipped: 0 }));
+              return this.pipeline!.embedByPrefix(path);
+            }
+          : undefined,
       };
       const handler = createHandler(this.settings.server.bearerToken, ctx);
       await this.httpServer.start(this.settings.server.port, handler);
