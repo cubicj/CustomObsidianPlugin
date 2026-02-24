@@ -9,6 +9,7 @@ interface VectorEntry {
 }
 
 interface StoreData {
+  dimension?: number;
   entries: Record<string, VectorEntry>;
 }
 
@@ -16,6 +17,7 @@ const STORE_PATH = ".obsidian/plugins/cubicj-plugin-package/vectors.json";
 
 export class VectorStore {
   private entries: Map<string, VectorEntry> = new Map();
+  private dimension: number | null = null;
 
   async load(vault: Vault): Promise<void> {
     try {
@@ -23,6 +25,7 @@ export class VectorStore {
         const raw = await vault.adapter.read(STORE_PATH);
         const data: StoreData = JSON.parse(raw);
         this.entries = new Map(Object.entries(data.entries));
+        this.dimension = data.dimension ?? null;
       }
     } catch (e) {
       console.error("Failed to load vector store:", e);
@@ -32,9 +35,18 @@ export class VectorStore {
 
   async save(vault: Vault): Promise<void> {
     const data: StoreData = {
+      dimension: this.dimension ?? undefined,
       entries: Object.fromEntries(this.entries),
     };
     await vault.adapter.write(STORE_PATH, JSON.stringify(data));
+  }
+
+  getDimension(): number | null {
+    return this.dimension;
+  }
+
+  setDimension(dim: number): void {
+    this.dimension = dim;
   }
 
   set(path: string, vec: number[], hash: string): void {
@@ -45,6 +57,18 @@ export class VectorStore {
     this.entries.delete(path);
   }
 
+  deleteByPrefix(prefix: string): void {
+    for (const key of this.entries.keys()) {
+      if (key === prefix || key.startsWith(prefix + "#")) {
+        this.entries.delete(key);
+      }
+    }
+  }
+
+  clear(): void {
+    this.entries.clear();
+  }
+
   has(path: string): boolean {
     return this.entries.has(path);
   }
@@ -53,6 +77,15 @@ export class VectorStore {
     const entry = this.entries.get(path);
     if (!entry) return true;
     return entry.hash !== hash;
+  }
+
+  needsUpdateByPrefix(prefix: string, hash: string): boolean {
+    for (const [key, entry] of this.entries) {
+      if (key === prefix || key.startsWith(prefix + "#")) {
+        return entry.hash !== hash;
+      }
+    }
+    return true;
   }
 
   get size(): number {
