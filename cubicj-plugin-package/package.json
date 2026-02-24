@@ -7,9 +7,12 @@
     "build": "node esbuild.config.mjs production"
   },
   "devDependencies": {
-    "obsidian": "latest",
-    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
     "esbuild": "^0.21.0",
-    "@types/node": "^20.0.0"
+    "obsidian": "latest",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1"
   }
 }
