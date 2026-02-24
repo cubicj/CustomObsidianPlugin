@@ -1,0 +1,9 @@
+{
+  "id": "no-auto-focus",
+  "name": "No Auto Focus",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "문서를 열 때 에디터에 자동 포커스가 잡히지 않도록 합니다. 클릭하면 정상적으로 편집 가능.",
+  "author": "CubicJ",
+  "isDesktopOnly": false
+}
