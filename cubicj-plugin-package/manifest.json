@@ -1,0 +1,9 @@
+{
+  "id": "cubicj-plugin-package",
+  "name": "CubicJ Plugin Package",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "Custom all-in-one plugin: font loader, focus control, semantic search, MCP server",
+  "author": "CubicJ",
+  "isDesktopOnly": true
+}
