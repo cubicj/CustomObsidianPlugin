@@ -1,6 +1,4 @@
 import { Notice, Plugin } from "obsidian";
-import { enableNoAutoFocus, disableNoAutoFocus } from "./modules/no-auto-focus";
-import { FontLoader, FontSettings, DEFAULT_FONT_SETTINGS } from "./modules/font-loader";
 import { PluginHttpServer } from "./server/http-server";
 import { createHandler, RouteContext } from "./server/routes";
 import { EmbeddingEngine } from "./embedding/engine";
@@ -44,20 +42,17 @@ export const DEFAULT_EMBEDDING_SETTINGS: EmbeddingSettings = {
 };
 
 export interface CubicJSettings {
-  font: FontSettings;
   server: ServerSettings;
   embedding: EmbeddingSettings;
 }
 
 export const DEFAULT_SETTINGS: CubicJSettings = {
-  font: DEFAULT_FONT_SETTINGS,
   server: DEFAULT_SERVER_SETTINGS,
   embedding: DEFAULT_EMBEDDING_SETTINGS,
 };
 
 export default class CubicJPlugin extends Plugin {
   settings: CubicJSettings;
-  fontLoader: FontLoader;
   httpServer: PluginHttpServer;
   embeddingEngine: EmbeddingEngine | null = null;
 
@@ -69,11 +64,6 @@ export default class CubicJPlugin extends Plugin {
       await this.saveSettings();
     }
 
-    enableNoAutoFocus();
-
-    this.fontLoader = new FontLoader(this.app);
-    await this.fontLoader.load(this.settings.font);
-
     this.httpServer = new PluginHttpServer();
     await this.startServer();
 
@@ -84,8 +74,6 @@ export default class CubicJPlugin extends Plugin {
   }
 
   async onunload() {
-    disableNoAutoFocus();
-    this.fontLoader?.unload();
     await this.httpServer?.stop();
     await this.embeddingEngine?.unload();
     console.log("CubicJ Plugin Package unloaded");
@@ -125,7 +113,6 @@ export default class CubicJPlugin extends Plugin {
       DEFAULT_SETTINGS,
       await this.loadData(),
     );
-    this.settings.font = Object.assign({}, DEFAULT_FONT_SETTINGS, this.settings.font);
     this.settings.server = Object.assign({}, DEFAULT_SERVER_SETTINGS, this.settings.server);
     this.settings.embedding = Object.assign({}, DEFAULT_EMBEDDING_SETTINGS, this.settings.embedding);
   }
