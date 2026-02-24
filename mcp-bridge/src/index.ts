@@ -42,6 +42,7 @@ server.tool(
   "vault_status",
   "Get the current status of the Obsidian vault and embedding engine. " +
     "Returns vault file count, embedding availability, vector count, model name, and dimension. " +
+    "Also returns pendingFiles (dirty queue), staleFiles (hash mismatch), and unembeddedFiles (no vectors). " +
     "Call this first to verify the plugin is running and check embedding coverage before searching.",
   {},
   async () => {
@@ -206,6 +207,31 @@ server.tool(
   async () => {
     try {
       return textResult(await pluginFetch("/vault/active"));
+    } catch (e) {
+      return errorResult(e);
+    }
+  }
+);
+
+server.tool(
+  "re_embed",
+  "Trigger re-embedding of vault notes. " +
+    "Without path: flushes all pending dirty files (modified since last embed). " +
+    "With path to a file: re-embeds that specific file. " +
+    "With path to a folder: re-embeds all markdown files under that folder. " +
+    "Uses content-hash dedup so unchanged files are skipped. " +
+    "Returns {processed, skipped} counts. " +
+    "Check vault_status first to see pendingFiles/staleFiles/unembeddedFiles counts.",
+  {
+    path: z.string().optional().describe("Optional vault-relative file or folder path to re-embed. Omit to flush all pending changes."),
+  },
+  async ({ path }) => {
+    try {
+      const result = await pluginFetch("/embedding/re-embed", {
+        method: "POST",
+        body: JSON.stringify({ path }),
+      });
+      return textResult(result);
     } catch (e) {
       return errorResult(e);
     }
