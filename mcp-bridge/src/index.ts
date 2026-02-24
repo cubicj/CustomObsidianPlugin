@@ -239,6 +239,50 @@ server.tool(
 );
 
 server.tool(
+  "append_to_file",
+  "Append content to the end of an existing file. " +
+    "Unlike update_file, this preserves existing content and adds new text at the end. " +
+    "Useful for adding entries to daily notes, logs, or inbox files without reading first. " +
+    "Returns {path} on success. Fails with 404 if file doesn't exist.",
+  {
+    path: z.string().describe("Vault-relative path of the file to append to"),
+    content: z.string().describe("Content to append at the end of the file"),
+  },
+  async ({ path, content }) => {
+    try {
+      const result = await pluginFetch("/vault/file", {
+        method: "PATCH",
+        body: JSON.stringify({ path, content }),
+      });
+      return textResult(result);
+    } catch (e) {
+      return errorResult(e);
+    }
+  }
+);
+
+server.tool(
+  "open_file",
+  "Open a file in the Obsidian editor. " +
+    "Navigates the Obsidian UI to display the specified file. " +
+    "Useful for directing the user's attention to a specific note after searching or editing.",
+  {
+    path: z.string().describe("Vault-relative path of the file to open (e.g. '2. Hubs/커피.md')"),
+  },
+  async ({ path }) => {
+    try {
+      const result = await pluginFetch("/vault/open", {
+        method: "POST",
+        body: JSON.stringify({ path }),
+      });
+      return textResult(result);
+    } catch (e) {
+      return errorResult(e);
+    }
+  }
+);
+
+server.tool(
   "reload_plugin",
   "Reload the Obsidian plugin (disable then re-enable). " +
     "Useful during development after rebuilding plugin code. " +

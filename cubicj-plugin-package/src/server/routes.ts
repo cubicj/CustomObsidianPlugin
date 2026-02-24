@@ -95,8 +95,14 @@ export function createHandler(bearerToken: string, ctx: RouteContext) {
       if (path === "/vault/file" && method === "PUT") {
         return await handleUpdateFile(ctx, req, res);
       }
+      if (path === "/vault/file" && method === "PATCH") {
+        return await handleAppendFile(ctx, req, res);
+      }
       if (path === "/vault/file" && method === "DELETE") {
         return await handleDeleteFile(ctx, req, res);
+      }
+      if (path === "/vault/open" && method === "POST") {
+        return await handleOpenFile(ctx, req, res);
       }
       if (path === "/vault/active" && method === "GET") {
         return await handleGetActive(ctx, res);
@@ -252,6 +258,31 @@ async function handleSearchSemantic(ctx: RouteContext, req: http.IncomingMessage
 
   const results = await ctx.searchSemantic(query, limit);
   sendJson(res, results);
+}
+
+async function handleAppendFile(ctx: RouteContext, req: http.IncomingMessage, res: http.ServerResponse) {
+  const body = await safeReadJson(req);
+  const { path: filePath, content } = body;
+  if (!filePath || typeof filePath !== "string") return sendError(res, "Missing path");
+  if (typeof content !== "string") return sendError(res, "Missing content field");
+
+  const file = ctx.app.vault.getAbstractFileByPath(filePath);
+  if (!(file instanceof TFile)) return sendError(res, "File not found", 404);
+
+  await ctx.app.vault.append(file, content);
+  sendJson(res, { path: file.path });
+}
+
+async function handleOpenFile(ctx: RouteContext, req: http.IncomingMessage, res: http.ServerResponse) {
+  const body = await safeReadJson(req);
+  const { path: filePath } = body;
+  if (!filePath || typeof filePath !== "string") return sendError(res, "Missing path");
+
+  const file = ctx.app.vault.getAbstractFileByPath(filePath);
+  if (!(file instanceof TFile)) return sendError(res, "File not found", 404);
+
+  await ctx.app.workspace.getLeaf().openFile(file);
+  sendJson(res, { path: file.path });
 }
 
 function handleReload(ctx: RouteContext, res: http.ServerResponse) {
