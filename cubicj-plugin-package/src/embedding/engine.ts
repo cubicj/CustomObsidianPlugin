@@ -1,6 +1,9 @@
+export type InputType = "document" | "query" | null;
+
 export interface EmbeddingAdapter {
   load(): Promise<void>;
-  embed(texts: string[]): Promise<number[][]>;
+  embed(texts: string[], inputType?: InputType): Promise<number[][]>;
+  embedContextualized?(inputs: string[][], inputType?: InputType): Promise<number[][]>;
   unload(): Promise<void>;
 }
 
@@ -24,11 +27,11 @@ export class EmbeddingEngine {
   }
 
   async embedTexts(texts: string[]): Promise<number[][]> {
-    return this.adapter.embed(texts);
+    return this.adapter.embed(texts, "document");
   }
 
   async embedQuery(query: string): Promise<number[]> {
-    const result = await this.adapter.embed([query]);
+    const result = await this.adapter.embed([query], "query");
     return result[0];
   }
 }
