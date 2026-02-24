@@ -60,64 +60,79 @@ export class CubicJSettingTab extends PluginSettingTab {
     const es = this.plugin.settings.embedding;
 
     new Setting(containerEl)
-      .setName("Mode")
-      .setDesc("Local model or external API")
-      .addDropdown((dd) => {
-        dd.addOption("local", "Local (transformers.js)");
-        dd.addOption("api", "API (OpenAI-compatible)");
-        dd.setValue(es.mode).onChange(async (value) => {
-          es.mode = value as "local" | "api";
+      .setName("API key")
+      .setDesc("Bearer token for the embedding API")
+      .addText((text) => {
+        text.inputEl.type = "password";
+        text.inputEl.style.width = "250px";
+        text.setValue(es.apiKey).onChange(async (value) => {
+          es.apiKey = value;
           await this.plugin.saveSettings();
-          this.display();
         });
       });
 
-    if (es.mode === "local") {
-      new Setting(containerEl)
-        .setName("Local model")
-        .setDesc("Hugging Face model ID")
-        .addText((text) => {
-          text.inputEl.style.width = "250px";
-          text.setValue(es.localModel).onChange(async (value) => {
-            es.localModel = value;
-            await this.plugin.saveSettings();
-          });
+    const endpointText = new Setting(containerEl)
+      .setName("API endpoint")
+      .setDesc("Embedding API endpoint (auto-set by model selection)")
+      .addText((text) => {
+        text.inputEl.style.width = "250px";
+        text.setValue(es.apiEndpoint).onChange(async (value) => {
+          es.apiEndpoint = value;
+          await this.plugin.saveSettings();
         });
-    } else {
-      new Setting(containerEl)
-        .setName("API endpoint")
-        .setDesc("OpenAI-compatible embeddings endpoint")
-        .addText((text) => {
-          text.inputEl.style.width = "250px";
-          text.setValue(es.apiEndpoint).onChange(async (value) => {
-            es.apiEndpoint = value;
-            await this.plugin.saveSettings();
-          });
-        });
+      });
 
-      new Setting(containerEl)
-        .setName("API key")
-        .setDesc("Bearer token for the embedding API")
-        .addText((text) => {
-          text.inputEl.type = "password";
-          text.inputEl.style.width = "250px";
-          text.setValue(es.apiKey).onChange(async (value) => {
-            es.apiKey = value;
-            await this.plugin.saveSettings();
-          });
-        });
+    const models: Record<string, { endpoint: string; label: string }> = {
+      "voyage-context-3": {
+        endpoint: "https://api.voyageai.com/v1/contextualizedembeddings",
+        label: "voyage-context-3 (contextualized)",
+      },
+      "voyage-4-large": {
+        endpoint: "https://api.voyageai.com/v1/embeddings",
+        label: "voyage-4-large",
+      },
+      "voyage-3-large": {
+        endpoint: "https://api.voyageai.com/v1/embeddings",
+        label: "voyage-3-large",
+      },
+      "voyage-3-lite": {
+        endpoint: "https://api.voyageai.com/v1/embeddings",
+        label: "voyage-3-lite",
+      },
+    };
 
-      new Setting(containerEl)
-        .setName("API model")
-        .setDesc("Model ID to use for embeddings")
-        .addText((text) => {
-          text.inputEl.style.width = "250px";
-          text.setValue(es.apiModel).onChange(async (value) => {
-            es.apiModel = value;
-            await this.plugin.saveSettings();
-          });
+    new Setting(containerEl)
+      .setName("API model")
+      .setDesc("Model ID to use for embeddings")
+      .addDropdown((dd) => {
+        for (const [id, info] of Object.entries(models)) {
+          dd.addOption(id, info.label);
+        }
+        dd.setValue(es.apiModel);
+        dd.onChange(async (value) => {
+          es.apiModel = value;
+          const info = models[value];
+          if (info) {
+            es.apiEndpoint = info.endpoint;
+            const epInput = endpointText.controlEl.querySelector("input");
+            if (epInput) (epInput as HTMLInputElement).value = info.endpoint;
+          }
+          await this.plugin.saveSettings();
         });
-    }
+      });
+
+    new Setting(containerEl)
+      .setName("Output dimension")
+      .setDesc("Embedding vector dimension (changing this resets all vectors)")
+      .addDropdown((dd) => {
+        const dims = ["256", "512", "1024", "2048"];
+        for (const d of dims) dd.addOption(d, d);
+        dd.setValue(String(es.outputDimension));
+        dd.onChange(async (value) => {
+          es.outputDimension = parseInt(value, 10);
+          await this.plugin.saveSettings();
+        });
+      });
   }
 
   private displayEmbeddingStatus(containerEl: HTMLElement) {
@@ -135,12 +150,30 @@ export class CubicJSettingTab extends PluginSettingTab {
       .setDesc("Re-process all notes (may take a while)")
       .addButton((btn) => {
         btn.setButtonText("Re-embed").onClick(async () => {
+          btn.setButtonText("Running...");
+          btn.setDisabled(true);
+          await this.plugin.initEmbeddingEngine();
           if (this.plugin.pipeline) {
-            btn.setButtonText("Running...");
-            btn.setDisabled(true);
             await this.plugin.pipeline.embedAll();
-            this.display();
           }
+          this.display();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Reset embeddings")
+      .setDesc("Clear all stored vectors and re-embed from scratch")
+      .addButton((btn) => {
+        btn.setButtonText("Reset").setWarning().onClick(async () => {
+          btn.setButtonText("Resetting...");
+          btn.setDisabled(true);
+          this.plugin.vectorStore.clear();
+          await this.plugin.vectorStore.save(this.app.vault);
+          await this.plugin.initEmbeddingEngine();
+          if (this.plugin.pipeline) {
+            await this.plugin.pipeline.embedAll();
+          }
+          this.display();
         });
       });
   }
