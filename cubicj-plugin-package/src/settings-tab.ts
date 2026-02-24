@@ -27,6 +27,7 @@ export class CubicJSettingTab extends PluginSettingTab {
       .setName("Port")
       .setDesc("HTTP server port (requires restart)")
       .addText((text) => {
+        text.inputEl.style.width = "250px";
         text.setValue(String(serverSettings.port)).onChange(async (value) => {
           const port = parseInt(value, 10);
           if (!isNaN(port) && port > 0 && port < 65536) {
@@ -76,6 +77,7 @@ export class CubicJSettingTab extends PluginSettingTab {
         .setName("Local model")
         .setDesc("Hugging Face model ID")
         .addText((text) => {
+          text.inputEl.style.width = "250px";
           text.setValue(es.localModel).onChange(async (value) => {
             es.localModel = value;
             await this.plugin.saveSettings();
@@ -86,6 +88,7 @@ export class CubicJSettingTab extends PluginSettingTab {
         .setName("API endpoint")
         .setDesc("OpenAI-compatible embeddings endpoint")
         .addText((text) => {
+          text.inputEl.style.width = "250px";
           text.setValue(es.apiEndpoint).onChange(async (value) => {
             es.apiEndpoint = value;
             await this.plugin.saveSettings();
@@ -97,6 +100,7 @@ export class CubicJSettingTab extends PluginSettingTab {
         .setDesc("Bearer token for the embedding API")
         .addText((text) => {
           text.inputEl.type = "password";
+          text.inputEl.style.width = "250px";
           text.setValue(es.apiKey).onChange(async (value) => {
             es.apiKey = value;
             await this.plugin.saveSettings();
@@ -107,6 +111,7 @@ export class CubicJSettingTab extends PluginSettingTab {
         .setName("API model")
         .setDesc("Model ID to use for embeddings")
         .addText((text) => {
+          text.inputEl.style.width = "250px";
           text.setValue(es.apiModel).onChange(async (value) => {
             es.apiModel = value;
             await this.plugin.saveSettings();
