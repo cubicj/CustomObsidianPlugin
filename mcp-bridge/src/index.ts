@@ -2,6 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
+process.stdout.on("error", () => {});
+
 const PLUGIN_URL = process.env.PLUGIN_URL || "http://127.0.0.1:27124";
 const BEARER_TOKEN = process.env.BEARER_TOKEN || "";
 
