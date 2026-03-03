@@ -96,9 +96,9 @@ export default class CubicJPlugin extends Plugin {
       const ctx: RouteContext = {
         app: this.app,
         searchSemantic: this.embeddingEngine
-          ? async (query: string, limit: number) => {
+          ? async (query: string, limit: number, diversity = 0) => {
               const vec = await this.embeddingEngine!.embedQuery(query);
-              return this.vectorStore.search(vec, limit);
+              return this.vectorStore.search(vec, limit, diversity);
             }
           : undefined,
         getStatus: () => ({

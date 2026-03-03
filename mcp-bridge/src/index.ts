@@ -58,20 +58,23 @@ server.tool(
 
 server.tool(
   "search_semantic",
-  "Search vault notes by semantic similarity using Voyage AI embeddings. " +
+  "Preferred search method. Search vault notes by semantic similarity using Voyage AI embeddings. " +
     "Finds contextually related content even without exact keyword matches. " +
     "Returns [{path, score}] sorted by relevance (score 0-1, higher is better). " +
     "Requires embedding engine to be running (check vault_status). " +
-    "Best for concept/topic searches. For exact text matching, use search_keyword instead.",
+    "Best for concept/topic searches. For exact text matching, use search_keyword instead. " +
+    "Use the diversity parameter (0-1) to get varied results via MMR — " +
+    "0 returns pure similarity ranking, higher values penalize redundant results.",
   {
     query: z.string().describe("Natural language search query (Korean or English)"),
     limit: z.number().int().min(1).max(50).optional().describe("Max results to return (default: 10, max: 50)"),
+    diversity: z.number().min(0).max(1).optional().describe("MMR diversity factor (0=pure relevance, 1=max diversity, default: 0)"),
   },
-  async ({ query, limit }) => {
+  async ({ query, limit, diversity }) => {
     try {
       const result = await pluginFetch("/search/semantic", {
         method: "POST",
-        body: JSON.stringify({ query, limit: limit ?? 10 }),
+        body: JSON.stringify({ query, limit: limit ?? 10, diversity: diversity ?? 0 }),
       });
       return textResult(result);
     } catch (e) {
@@ -84,8 +87,8 @@ server.tool(
   "search_keyword",
   "Search vault notes by case-insensitive keyword matching. " +
     "Returns [{path, matches[]}] where matches are up to 5 matching lines per file. " +
-    "Fast and precise for finding notes containing specific words, names, or phrases. " +
-    "For conceptual/semantic searches, use search_semantic instead.",
+    "Only use when you need exact substring matching (e.g. specific file names, tags, or unique identifiers). " +
+    "Prefer search_semantic for general searches.",
   {
     query: z.string().describe("Keyword or phrase to search for (case-insensitive substring match)"),
     limit: z.number().int().min(1).max(100).optional().describe("Max files to return (default: 20, max: 100)"),
@@ -162,7 +165,8 @@ server.tool(
   "update_file",
   "Overwrite the entire content of an existing file. " +
     "Returns {path} on success. Fails with 404 if file doesn't exist. " +
-    "WARNING: Replaces all content — read the file first if you need to preserve parts.",
+    "WARNING: Replaces all content — read the file first if you need to preserve parts. " +
+    "The user may have edited the file since you last read it, so ALWAYS re-read immediately before updating.",
   {
     path: z.string().describe("Vault-relative path of the file to update"),
     content: z.string().describe("New complete markdown content (replaces everything)"),

@@ -104,15 +104,45 @@ export class VectorStore {
     return this.entries.size;
   }
 
-  search(queryVec: number[], limit: number): Array<{ path: string; score: number }> {
-    const results: Array<{ path: string; score: number }> = [];
-
+  search(queryVec: number[], limit: number, diversity = 0): Array<{ path: string; score: number }> {
+    const scored: Array<{ path: string; score: number; vec: number[] }> = [];
     for (const entry of this.entries.values()) {
-      const score = cosSim(queryVec, entry.vec);
-      results.push({ path: entry.path, score });
+      scored.push({ path: entry.path, score: cosSim(queryVec, entry.vec), vec: entry.vec });
+    }
+    scored.sort((a, b) => b.score - a.score);
+
+    if (diversity <= 0) {
+      return scored.slice(0, limit).map(({ path, score }) => ({ path, score }));
     }
 
-    results.sort((a, b) => b.score - a.score);
-    return results.slice(0, limit);
+    const lambda = 1 - diversity;
+    const pool = scored.slice(0, Math.max(limit * 4, 50));
+    const selected: Array<{ path: string; score: number }> = [];
+    const selectedVecs: number[][] = [];
+
+    while (selected.length < limit && pool.length > 0) {
+      let bestIdx = 0;
+      let bestMmr = -Infinity;
+
+      for (let i = 0; i < pool.length; i++) {
+        const candidate = pool[i];
+        let maxSimToSelected = 0;
+        for (const sv of selectedVecs) {
+          const sim = cosSim(candidate.vec, sv);
+          if (sim > maxSimToSelected) maxSimToSelected = sim;
+        }
+        const mmr = lambda * candidate.score - (1 - lambda) * maxSimToSelected;
+        if (mmr > bestMmr) {
+          bestMmr = mmr;
+          bestIdx = i;
+        }
+      }
+
+      const winner = pool.splice(bestIdx, 1)[0];
+      selected.push({ path: winner.path, score: winner.score });
+      selectedVecs.push(winner.vec);
+    }
+
+    return selected;
   }
 }

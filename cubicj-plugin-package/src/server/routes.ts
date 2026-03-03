@@ -54,7 +54,7 @@ async function safeReadJson(req: http.IncomingMessage): Promise<Record<string, u
 
 export interface RouteContext {
   app: App;
-  searchSemantic?: (query: string, limit: number) => Promise<Array<{ path: string; score: number }>>;
+  searchSemantic?: (query: string, limit: number, diversity?: number) => Promise<Array<{ path: string; score: number }>>;
   getStatus?: () => { vectorCount: number; model: string | null; dimension: number | null };
   getEmbeddingStats?: () => Promise<{ pendingFiles: number; staleFiles: number; unembeddedFiles: number }>;
   reEmbed?: (path?: string) => Promise<{ processed: number; skipped: number }>;
@@ -253,10 +253,10 @@ async function handleSearchSemantic(ctx: RouteContext, req: http.IncomingMessage
     return sendError(res, "Semantic search not available", 503);
   }
   const body = await safeReadJson(req);
-  const { query, limit = 10 } = body;
+  const { query, limit = 10, diversity = 0 } = body;
   if (!query) return sendError(res, "Missing query");
 
-  const results = await ctx.searchSemantic(query, limit);
+  const results = await ctx.searchSemantic(query, limit, diversity);
   sendJson(res, results);
 }
 
