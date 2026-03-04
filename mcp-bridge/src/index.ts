@@ -309,7 +309,9 @@ server.tool(
   "get_beans",
   "Get all bean notes from the vault with parsed frontmatter. " +
     "Returns bean name, path, roaster, status (active/finished), roast date, and days since roast. " +
-    "Use status filter to find currently active beans or browse all beans.",
+    "Use status filter to find currently active beans or browse all beans. " +
+    "Bean notes have frontmatter fields: type, roaster, status, roast_date. " +
+    "To read tasting notes or manual records in the bean note body, use get_file with the returned path.",
   {
     status: z
       .enum(["active", "finished", "all"])
@@ -333,6 +335,8 @@ server.tool(
   "Get brew records with optional filtering. " +
     "Returns full brew data including grind size, dose, yield, time, notes, and method-specific fields. " +
     "Sorted by timestamp descending (newest first). " +
+    "Espresso records include: basket, accessories, drink, waterWeight. " +
+    "Filter records include: waterTemp, filter, dripper, profilePath. " +
     "For brew profiles (weight-over-time data), use get_file with the record's profilePath.",
   {
     bean: z.string().optional().describe("Filter by bean name (exact match)"),
