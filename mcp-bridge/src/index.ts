@@ -305,5 +305,85 @@ server.tool(
   }
 );
 
+server.tool(
+  "get_beans",
+  "Get all bean notes from the vault with parsed frontmatter. " +
+    "Returns bean name, path, roaster, status (active/finished), roast date, and days since roast. " +
+    "Use status filter to find currently active beans or browse all beans.",
+  {
+    status: z
+      .enum(["active", "finished", "all"])
+      .optional()
+      .describe("Filter by bean status (default: 'all')"),
+  },
+  async ({ status }) => {
+    try {
+      const params = new URLSearchParams();
+      if (status) params.set("status", status);
+      const qs = params.toString();
+      return textResult(await pluginFetch(`/brewing/beans${qs ? `?${qs}` : ""}`));
+    } catch (e) {
+      return errorResult(e);
+    }
+  }
+);
+
+server.tool(
+  "get_brew_records",
+  "Get brew records with optional filtering. " +
+    "Returns full brew data including grind size, dose, yield, time, notes, and method-specific fields. " +
+    "Sorted by timestamp descending (newest first). " +
+    "For brew profiles (weight-over-time data), use get_file with the record's profilePath.",
+  {
+    bean: z.string().optional().describe("Filter by bean name (exact match)"),
+    method: z
+      .enum(["filter", "espresso"])
+      .optional()
+      .describe("Filter by brew method"),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe("Max records to return (default: 50)"),
+  },
+  async ({ bean, method, limit }) => {
+    try {
+      const params = new URLSearchParams();
+      if (bean) params.set("bean", bean);
+      if (method) params.set("method", method);
+      if (limit) params.set("limit", String(limit));
+      const qs = params.toString();
+      return textResult(await pluginFetch(`/brewing/records${qs ? `?${qs}` : ""}`));
+    } catch (e) {
+      return errorResult(e);
+    }
+  }
+);
+
+server.tool(
+  "get_brew_summary",
+  "Get per-bean aggregated brewing statistics. " +
+    "Returns total brews, last brew date, method breakdown, average grind size, average dose, and grinders used. " +
+    "Useful for understanding brewing patterns and comparing beans at a glance.",
+  {
+    bean: z
+      .string()
+      .optional()
+      .describe("Specific bean name to get summary for. Omit for all beans."),
+  },
+  async ({ bean }) => {
+    try {
+      const params = new URLSearchParams();
+      if (bean) params.set("bean", bean);
+      const qs = params.toString();
+      return textResult(await pluginFetch(`/brewing/summary${qs ? `?${qs}` : ""}`));
+    } catch (e) {
+      return errorResult(e);
+    }
+  }
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);
