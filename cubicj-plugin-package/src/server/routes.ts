@@ -119,6 +119,15 @@ export function createHandler(bearerToken: string, ctx: RouteContext) {
       if (path === "/embedding/re-embed" && method === "POST") {
         return await handleReEmbed(ctx, req, res);
       }
+      if (path === "/brewing/beans" && method === "GET") {
+        return await handleGetBeans(ctx, req, res);
+      }
+      if (path === "/brewing/records" && method === "GET") {
+        return await handleGetBrewRecords(ctx, req, res);
+      }
+      if (path === "/brewing/summary" && method === "GET") {
+        return await handleGetBrewSummary(ctx, req, res);
+      }
       if (path === "/status" && method === "GET") {
         return await handleStatus(ctx, res);
       }
@@ -299,6 +308,121 @@ async function handleReEmbed(ctx: RouteContext, req: http.IncomingMessage, res: 
 
   const result = await ctx.reEmbed(path);
   sendJson(res, result);
+}
+
+async function handleGetBeans(ctx: RouteContext, req: http.IncomingMessage, res: http.ServerResponse) {
+  const status = getQueryParam(req.url || "", "status") || "all";
+
+  const files = ctx.app.vault.getMarkdownFiles();
+  const beans: Array<{
+    name: string;
+    path: string;
+    roaster: string | null;
+    status: string | null;
+    roastDate: string | null;
+    roastDays: number | null;
+  }> = [];
+
+  for (const file of files) {
+    const fm = ctx.app.metadataCache.getFileCache(file)?.frontmatter;
+    if (fm?.type !== "bean") continue;
+    if (status !== "all" && fm.status !== status) continue;
+
+    const roastDate = fm.roast_date ?? null;
+    const roastDays = roastDate
+      ? Math.floor((Date.now() - new Date(roastDate).getTime()) / 86400000)
+      : null;
+
+    beans.push({
+      name: file.basename,
+      path: file.path,
+      roaster: fm.roaster ?? null,
+      status: fm.status ?? null,
+      roastDate,
+      roastDays,
+    });
+  }
+
+  sendJson(res, beans);
+}
+
+async function handleGetBrewRecords(ctx: RouteContext, req: http.IncomingMessage, res: http.ServerResponse) {
+  const url = req.url || "";
+  const bean = getQueryParam(url, "bean");
+  const method = getQueryParam(url, "method");
+  const limitStr = getQueryParam(url, "limit");
+  const limit = limitStr ? parseInt(limitStr, 10) : 50;
+
+  const dataPath = "cubicj-brewing/brew-records.json";
+  if (!(await ctx.app.vault.adapter.exists(dataPath))) return sendJson(res, []);
+
+  const raw = await ctx.app.vault.adapter.read(dataPath);
+  let records: any[] = JSON.parse(raw);
+
+  if (bean) records = records.filter((r) => r.bean === bean);
+  if (method) records = records.filter((r) => r.method === method);
+
+  records.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  records = records.slice(0, limit);
+
+  sendJson(res, records);
+}
+
+async function handleGetBrewSummary(ctx: RouteContext, req: http.IncomingMessage, res: http.ServerResponse) {
+  const bean = getQueryParam(req.url || "", "bean");
+
+  const dataPath = "cubicj-brewing/brew-records.json";
+  if (!(await ctx.app.vault.adapter.exists(dataPath))) return sendJson(res, []);
+
+  const raw = await ctx.app.vault.adapter.read(dataPath);
+  let records: any[] = JSON.parse(raw);
+
+  if (bean) records = records.filter((r) => r.bean === bean);
+
+  const grouped = new Map<string, any[]>();
+  for (const r of records) {
+    if (!grouped.has(r.bean)) grouped.set(r.bean, []);
+    grouped.get(r.bean)!.push(r);
+  }
+
+  const summaries: Array<{
+    bean: string;
+    totalBrews: number;
+    lastBrew: string;
+    methods: Record<string, number>;
+    avgGrindSize: number | null;
+    avgDose: number | null;
+    grinders: string[];
+  }> = [];
+
+  for (const [beanName, recs] of grouped) {
+    const methods: Record<string, number> = {};
+    let totalGrind = 0, grindCount = 0;
+    let totalDose = 0, doseCount = 0;
+    const grinders = new Set<string>();
+
+    for (const r of recs) {
+      methods[r.method] = (methods[r.method] || 0) + 1;
+      if (r.grindSize != null) { totalGrind += r.grindSize; grindCount++; }
+      if (r.dose != null) { totalDose += r.dose; doseCount++; }
+      if (r.grinder) grinders.add(r.grinder);
+    }
+
+    recs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    summaries.push({
+      bean: beanName,
+      totalBrews: recs.length,
+      lastBrew: recs[0].timestamp,
+      methods,
+      avgGrindSize: grindCount > 0 ? Math.round((totalGrind / grindCount) * 10) / 10 : null,
+      avgDose: doseCount > 0 ? Math.round((totalDose / doseCount) * 10) / 10 : null,
+      grinders: [...grinders],
+    });
+  }
+
+  summaries.sort((a, b) => new Date(b.lastBrew).getTime() - new Date(a.lastBrew).getTime());
+  sendJson(res, summaries);
 }
 
 async function handleStatus(ctx: RouteContext, res: http.ServerResponse) {
