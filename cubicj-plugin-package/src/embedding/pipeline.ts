@@ -123,7 +123,7 @@ export class EmbeddingPipeline {
         for (const doc of batch) {
           this.store.deleteByPrefix(doc.path);
           for (const chunk of doc.chunks) {
-            this.store.set(chunk.key, vecs[vecIdx++], doc.hash);
+            this.store.set(chunk.key, vecs[vecIdx++], doc.hash, chunk.content, chunk.heading);
           }
         }
         processed += batch.length;
@@ -157,7 +157,7 @@ export class EmbeddingPipeline {
 
       this.store.deleteByPrefix(file.path);
       for (let i = 0; i < chunks.length; i++) {
-        this.store.set(chunks[i].key, vecs[i], hash);
+        this.store.set(chunks[i].key, vecs[i], hash, chunks[i].content, chunks[i].heading);
       }
       await this.store.save(this.vault);
     } catch (e) {
@@ -213,7 +213,7 @@ export class EmbeddingPipeline {
         for (const doc of batch) {
           this.store.deleteByPrefix(doc.path);
           for (const chunk of doc.chunks) {
-            this.store.set(chunk.key, vecs[vecIdx++], doc.hash);
+            this.store.set(chunk.key, vecs[vecIdx++], doc.hash, chunk.content, chunk.heading);
           }
         }
         processed += batch.length;
@@ -286,7 +286,7 @@ export class EmbeddingPipeline {
         for (const doc of batch) {
           this.store.deleteByPrefix(doc.path);
           for (const chunk of doc.chunks) {
-            this.store.set(chunk.key, vecs[vecIdx++], doc.hash);
+            this.store.set(chunk.key, vecs[vecIdx++], doc.hash, chunk.content, chunk.heading);
           }
         }
         processed += batch.length;

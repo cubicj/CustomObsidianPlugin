@@ -6,6 +6,8 @@ interface VectorEntry {
   vec: number[];
   hash: string;
   updated: number;
+  content: string;
+  heading: string;
 }
 
 interface StoreData {
@@ -61,8 +63,8 @@ export class VectorStore {
     this.model = model;
   }
 
-  set(path: string, vec: number[], hash: string): void {
-    this.entries.set(path, { path, vec, hash, updated: Date.now() });
+  set(path: string, vec: number[], hash: string, content: string, heading: string): void {
+    this.entries.set(path, { path, vec, hash, updated: Date.now(), content, heading });
   }
 
   delete(path: string): void {
@@ -104,20 +106,26 @@ export class VectorStore {
     return this.entries.size;
   }
 
-  search(queryVec: number[], limit: number, diversity = 0): Array<{ path: string; score: number }> {
-    const scored: Array<{ path: string; score: number; vec: number[] }> = [];
+  search(queryVec: number[], limit: number, diversity = 0): Array<{ path: string; heading: string; content: string; score: number }> {
+    const scored: Array<{ path: string; heading: string; content: string; score: number; vec: number[] }> = [];
     for (const entry of this.entries.values()) {
-      scored.push({ path: entry.path, score: cosSim(queryVec, entry.vec), vec: entry.vec });
+      scored.push({
+        path: entry.path,
+        heading: entry.heading,
+        content: entry.content,
+        score: cosSim(queryVec, entry.vec),
+        vec: entry.vec,
+      });
     }
     scored.sort((a, b) => b.score - a.score);
 
     if (diversity <= 0) {
-      return scored.slice(0, limit).map(({ path, score }) => ({ path, score }));
+      return scored.slice(0, limit).map(({ path, heading, content, score }) => ({ path, heading, content, score }));
     }
 
     const lambda = 1 - diversity;
     const pool = scored.slice(0, Math.max(limit * 4, 50));
-    const selected: Array<{ path: string; score: number }> = [];
+    const selected: Array<{ path: string; heading: string; content: string; score: number }> = [];
     const selectedVecs: number[][] = [];
 
     while (selected.length < limit && pool.length > 0) {
@@ -139,10 +147,18 @@ export class VectorStore {
       }
 
       const winner = pool.splice(bestIdx, 1)[0];
-      selected.push({ path: winner.path, score: winner.score });
+      selected.push({ path: winner.path, heading: winner.heading, content: winner.content, score: winner.score });
       selectedVecs.push(winner.vec);
     }
 
     return selected;
+  }
+
+  getEntry(key: string): VectorEntry | undefined {
+    return this.entries.get(key);
+  }
+
+  get allEntries(): Map<string, VectorEntry> {
+    return this.entries;
   }
 }
