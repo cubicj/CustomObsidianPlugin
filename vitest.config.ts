@@ -5,4 +5,9 @@ export default defineConfig({
     pool: "forks",
     include: ["**/src/__tests__/**/*.test.ts"],
   },
+  resolve: {
+    alias: {
+      obsidian: "./cubicj-plugin-package/src/__tests__/__mocks__/obsidian.ts",
+    },
+  },
 });
