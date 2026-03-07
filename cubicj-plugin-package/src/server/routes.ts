@@ -54,7 +54,8 @@ async function safeReadJson(req: http.IncomingMessage): Promise<Record<string, u
 
 export interface RouteContext {
   app: App;
-  searchSemantic?: (query: string, limit: number, diversity?: number) => Promise<Array<{ path: string; score: number }>>;
+  searchSemantic?: (query: string, limit: number, diversity?: number) => Promise<Array<{ path: string; heading: string; content: string; score: number }>>;
+  rerank?: (query: string, documents: string[], topK?: number) => Promise<Array<{ index: number; relevanceScore: number }>>;
   getStatus?: () => { vectorCount: number; model: string | null; dimension: number | null };
   getEmbeddingStats?: () => Promise<{ pendingFiles: number; staleFiles: number; unembeddedFiles: number }>;
   reEmbed?: (path?: string) => Promise<{ processed: number; skipped: number }>;
@@ -110,8 +111,8 @@ export function createHandler(bearerToken: string, ctx: RouteContext) {
       if (path === "/search/keyword" && method === "POST") {
         return await handleSearchKeyword(ctx, req, res);
       }
-      if (path === "/search/semantic" && method === "POST") {
-        return await handleSearchSemantic(ctx, req, res);
+      if (path === "/search" && method === "POST") {
+        return await handleSearch(ctx, req, res);
       }
       if (path === "/plugin/reload" && method === "POST") {
         return handleReload(ctx, res);
@@ -257,15 +258,90 @@ async function handleSearchKeyword(ctx: RouteContext, req: http.IncomingMessage,
   sendJson(res, results);
 }
 
-async function handleSearchSemantic(ctx: RouteContext, req: http.IncomingMessage, res: http.ServerResponse) {
+async function handleSearch(ctx: RouteContext, req: http.IncomingMessage, res: http.ServerResponse) {
   if (!ctx.searchSemantic) {
-    return sendError(res, "Semantic search not available", 503);
+    return sendError(res, "Search not available (embedding engine not loaded)", 503);
   }
   const body = await safeReadJson(req);
   const { query, limit = 10, diversity = 0 } = body;
-  if (!query) return sendError(res, "Missing query");
+  if (!query || typeof query !== "string") return sendError(res, "Missing query");
 
-  const results = await ctx.searchSemantic(query, limit, diversity);
+  const candidateCount = Math.max((limit as number) * 3, 30);
+
+  const semanticResults = await ctx.searchSemantic(query, candidateCount, diversity as number);
+
+  const keywordResults: Array<{ path: string; heading: string; content: string }> = [];
+  const lowerQuery = query.toLowerCase();
+  const files = ctx.app.vault.getMarkdownFiles();
+  for (const file of files) {
+    const fileContent = await ctx.app.vault.cachedRead(file);
+    if (!fileContent.toLowerCase().includes(lowerQuery)) continue;
+    const lines = fileContent.split("\n");
+    const matchLines = lines
+      .filter((line) => line.toLowerCase().includes(lowerQuery))
+      .slice(0, 3)
+      .join("\n");
+    keywordResults.push({ path: file.path, heading: "", content: matchLines });
+    if (keywordResults.length >= candidateCount) break;
+  }
+
+  const RRF_K = 60;
+  const rrfScores = new Map<string, { path: string; heading: string; content: string; score: number }>();
+
+  for (let i = 0; i < semanticResults.length; i++) {
+    const r = semanticResults[i];
+    const key = r.heading ? `${r.path}#${r.heading}` : r.path;
+    const existing = rrfScores.get(key);
+    const rrfScore = 1 / (RRF_K + i + 1);
+    if (existing) {
+      existing.score += rrfScore;
+    } else {
+      rrfScores.set(key, { path: r.path, heading: r.heading, content: r.content, score: rrfScore });
+    }
+  }
+
+  for (let i = 0; i < keywordResults.length; i++) {
+    const r = keywordResults[i];
+    const key = r.heading ? `${r.path}#${r.heading}` : r.path;
+    const existing = rrfScores.get(key);
+    const rrfScore = 1 / (RRF_K + i + 1);
+    if (existing) {
+      existing.score += rrfScore;
+    } else {
+      rrfScores.set(key, { path: r.path, heading: r.heading, content: r.content, score: rrfScore });
+    }
+  }
+
+  let merged = [...rrfScores.values()];
+  merged.sort((a, b) => b.score - a.score);
+
+  const rerankCandidates = merged.slice(0, Math.max((limit as number) * 2, 20));
+
+  if (ctx.rerank && rerankCandidates.length > 0) {
+    try {
+      const docs = rerankCandidates.map((r) => r.content);
+      const reranked = await ctx.rerank(query, docs, limit as number);
+      const results = reranked.map((rr) => {
+        const original = rerankCandidates[rr.index];
+        return {
+          path: original.path,
+          heading: original.heading,
+          snippet: original.content.slice(0, 500),
+          score: rr.relevanceScore,
+        };
+      });
+      return sendJson(res, results);
+    } catch (e) {
+      console.error("Reranking failed, falling back to RRF scores:", e);
+    }
+  }
+
+  const results = rerankCandidates.slice(0, limit as number).map((r) => ({
+    path: r.path,
+    heading: r.heading,
+    snippet: r.content.slice(0, 500),
+    score: r.score,
+  }));
   sendJson(res, results);
 }
 

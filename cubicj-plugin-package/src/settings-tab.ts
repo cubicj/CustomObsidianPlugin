@@ -133,6 +133,20 @@ export class CubicJSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         });
       });
+
+    new Setting(containerEl)
+      .setName("Reranker model")
+      .setDesc("Reranks search results for better precision. 'none' disables reranking.")
+      .addDropdown((dd) => {
+        dd.addOption("rerank-2.5", "rerank-2.5");
+        dd.addOption("rerank-2.5-lite", "rerank-2.5-lite");
+        dd.addOption("none", "None (disabled)");
+        dd.setValue(es.rerankerModel);
+        dd.onChange(async (value) => {
+          es.rerankerModel = value;
+          await this.plugin.saveSettings();
+        });
+      });
   }
 
   private displayEmbeddingStatus(containerEl: HTMLElement) {

@@ -5,6 +5,7 @@ import { EmbeddingEngine } from "./embedding/engine";
 import { ApiEmbeddingAdapter, ContextualizedApiAdapter } from "./embedding/api-adapter";
 import { VectorStore } from "./embedding/vector-store";
 import { EmbeddingPipeline } from "./embedding/pipeline";
+import { VoyageReranker } from "./embedding/reranker";
 import { CubicJSettingTab } from "./settings-tab";
 
 function getTokenBudget(model: string): number {
@@ -37,6 +38,7 @@ export interface EmbeddingSettings {
   apiKey: string;
   apiModel: string;
   outputDimension: number;
+  rerankerModel: string;
 }
 
 export const DEFAULT_EMBEDDING_SETTINGS: EmbeddingSettings = {
@@ -44,6 +46,7 @@ export const DEFAULT_EMBEDDING_SETTINGS: EmbeddingSettings = {
   apiKey: "",
   apiModel: "voyage-context-3",
   outputDimension: 1024,
+  rerankerModel: "rerank-2.5",
 };
 
 export interface CubicJSettings {
@@ -93,12 +96,22 @@ export default class CubicJPlugin extends Plugin {
 
   async startServer() {
     try {
+      const rerankerModel = this.settings.embedding.rerankerModel;
+      const reranker = rerankerModel !== "none" && this.settings.embedding.apiKey
+        ? new VoyageReranker(this.settings.embedding.apiKey, rerankerModel)
+        : null;
+
       const ctx: RouteContext = {
         app: this.app,
         searchSemantic: this.embeddingEngine
           ? async (query: string, limit: number, diversity = 0) => {
               const vec = await this.embeddingEngine!.embedQuery(query);
               return this.vectorStore.search(vec, limit, diversity);
+            }
+          : undefined,
+        rerank: reranker
+          ? async (query: string, documents: string[], topK?: number) => {
+              return reranker.rerank(query, documents, topK);
             }
           : undefined,
         getStatus: () => ({
