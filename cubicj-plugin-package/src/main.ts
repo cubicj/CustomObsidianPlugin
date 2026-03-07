@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { Notice, Plugin, TFile } from "obsidian";
 import { PluginHttpServer } from "./server/http-server";
 import { createHandler, RouteContext } from "./server/routes";
@@ -15,12 +16,7 @@ function getTokenBudget(model: string): number {
 }
 
 function generateToken(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let result = "";
-  for (let i = 0; i < 32; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+  return randomBytes(24).toString("base64url");
 }
 
 export interface ServerSettings {
