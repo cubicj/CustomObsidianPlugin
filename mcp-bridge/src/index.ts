@@ -57,14 +57,12 @@ server.tool(
 );
 
 server.tool(
-  "search_semantic",
-  "Preferred search method. Search vault notes by semantic similarity using Voyage AI embeddings. " +
-    "Finds contextually related content even without exact keyword matches. " +
-    "Returns [{path, score}] sorted by relevance (score 0-1, higher is better). " +
-    "Requires embedding engine to be running (check vault_status). " +
-    "Best for concept/topic searches. For exact text matching, use search_keyword instead. " +
-    "Use the diversity parameter (0-1) to get varied results via MMR — " +
-    "0 returns pure similarity ranking, higher values penalize redundant results.",
+  "search",
+  "Search vault notes using hybrid search (semantic + keyword + reranking). " +
+    "Combines embedding similarity with keyword matching via RRF fusion, " +
+    "then reranks results using Voyage rerank-2.5 for best precision. " +
+    "Returns [{path, heading, snippet, score}] sorted by relevance. " +
+    "This is the primary search method — prefer over search_keyword unless you need exact substring matching.",
   {
     query: z.string().describe("Natural language search query (Korean or English)"),
     limit: z.number().int().min(1).max(50).optional().describe("Max results to return (default: 10, max: 50)"),
@@ -72,7 +70,7 @@ server.tool(
   },
   async ({ query, limit, diversity }) => {
     try {
-      const result = await pluginFetch("/search/semantic", {
+      const result = await pluginFetch("/search", {
         method: "POST",
         body: JSON.stringify({ query, limit: limit ?? 10, diversity: diversity ?? 0 }),
       });
@@ -88,7 +86,7 @@ server.tool(
   "Search vault notes by case-insensitive keyword matching. " +
     "Returns [{path, matches[]}] where matches are up to 5 matching lines per file. " +
     "Only use when you need exact substring matching (e.g. specific file names, tags, or unique identifiers). " +
-    "Prefer search_semantic for general searches.",
+    "Prefer search for general searches.",
   {
     query: z.string().describe("Keyword or phrase to search for (case-insensitive substring match)"),
     limit: z.number().int().min(1).max(100).optional().describe("Max files to return (default: 20, max: 100)"),
