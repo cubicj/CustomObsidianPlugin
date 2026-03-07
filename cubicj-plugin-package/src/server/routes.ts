@@ -64,7 +64,9 @@ export interface RouteContext {
 
 export function createHandler(bearerToken: string, ctx: RouteContext) {
   return async (req: http.IncomingMessage, res: http.ServerResponse) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    const origin = req.headers.origin || "";
+    const allowed = origin === "http://127.0.0.1" || origin.startsWith("http://127.0.0.1:");
+    res.setHeader("Access-Control-Allow-Origin", allowed ? origin : "http://127.0.0.1");
     res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
 
