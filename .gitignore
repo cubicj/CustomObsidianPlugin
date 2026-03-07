@@ -1,5 +1,4 @@
 node_modules/
-.serena/
 *.env
 .DS_Store
 Thumbs.db
