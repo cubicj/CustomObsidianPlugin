@@ -7,7 +7,7 @@ const MAX_BATCH_ITEMS = 128;
 const MAX_RETRIES = 3;
 const RETRY_BASE_MS = 1000;
 
-function contentHash(content: string): string {
+export function contentHash(content: string): string {
   let hash = 0;
   for (let i = 0; i < content.length; i++) {
     const char = content.charCodeAt(i);
@@ -17,15 +17,43 @@ function contentHash(content: string): string {
   return hash.toString(36);
 }
 
-function estimateTokens(text: string): number {
+export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 2);
 }
 
-interface PendingDocument {
+export interface PendingDocument {
   path: string;
   hash: string;
   chunks: Chunk[];
   tokens: number;
+}
+
+export function buildBatches(pending: PendingDocument[], maxBatchTokens: number): PendingDocument[][] {
+  const batches: PendingDocument[][] = [];
+  let current: PendingDocument[] = [];
+  let currentTokens = 0;
+  let currentChunks = 0;
+
+  for (const doc of pending) {
+    const safeLimit = maxBatchTokens * 0.85;
+    const wouldExceedTokens = currentTokens + doc.tokens > safeLimit;
+    const wouldExceedItems = current.length >= MAX_BATCH_ITEMS;
+    const wouldExceedChunks = currentChunks + doc.chunks.length > 16000;
+
+    if (current.length > 0 && (wouldExceedTokens || wouldExceedItems || wouldExceedChunks)) {
+      batches.push(current);
+      current = [];
+      currentTokens = 0;
+      currentChunks = 0;
+    }
+
+    current.push(doc);
+    currentTokens += doc.tokens;
+    currentChunks += doc.chunks.length;
+  }
+
+  if (current.length > 0) batches.push(current);
+  return batches;
 }
 
 export class EmbeddingPipeline {
@@ -38,34 +66,6 @@ export class EmbeddingPipeline {
     private vault: Vault,
     private maxBatchTokens: number = 120_000
   ) {}
-
-  private buildBatches(pending: PendingDocument[]): PendingDocument[][] {
-    const batches: PendingDocument[][] = [];
-    let current: PendingDocument[] = [];
-    let currentTokens = 0;
-    let currentChunks = 0;
-
-    for (const doc of pending) {
-      const safeLimit = this.maxBatchTokens * 0.85;
-      const wouldExceedTokens = currentTokens + doc.tokens > safeLimit;
-      const wouldExceedItems = current.length >= MAX_BATCH_ITEMS;
-      const wouldExceedChunks = currentChunks + doc.chunks.length > 16000;
-
-      if (current.length > 0 && (wouldExceedTokens || wouldExceedItems || wouldExceedChunks)) {
-        batches.push(current);
-        current = [];
-        currentTokens = 0;
-        currentChunks = 0;
-      }
-
-      current.push(doc);
-      currentTokens += doc.tokens;
-      currentChunks += doc.chunks.length;
-    }
-
-    if (current.length > 0) batches.push(current);
-    return batches;
-  }
 
   private async embedBatchWithRetry(batch: PendingDocument[]): Promise<number[][]> {
     const inputs = batch.map((doc) => doc.chunks.map((c) => c.content));
@@ -113,7 +113,7 @@ export class EmbeddingPipeline {
       pending.push({ path: file.path, hash, chunks, tokens: estimateTokens(content) });
     }
 
-    const batches = this.buildBatches(pending);
+    const batches = buildBatches(pending, this.maxBatchTokens);
 
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
@@ -202,7 +202,7 @@ export class EmbeddingPipeline {
       pending.push({ path: p, hash, chunks, tokens: estimateTokens(content) });
     }
 
-    const batches = this.buildBatches(pending);
+    const batches = buildBatches(pending, this.maxBatchTokens);
     let processed = 0;
 
     for (let i = 0; i < batches.length; i++) {
@@ -275,7 +275,7 @@ export class EmbeddingPipeline {
       pending.push({ path: file.path, hash, chunks, tokens: estimateTokens(content) });
     }
 
-    const batches = this.buildBatches(pending);
+    const batches = buildBatches(pending, this.maxBatchTokens);
     let processed = 0;
 
     for (let i = 0; i < batches.length; i++) {
