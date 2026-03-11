@@ -1,6 +1,0 @@
-node_modules/
-main.js
-*.js.map
-data.json
-*.css
-!src/**/*.css
