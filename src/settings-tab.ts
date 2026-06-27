@@ -1,5 +1,6 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type CubicJCorePlugin from "./main";
+import { joinPathList, splitPathList } from "./modules/frontmatter-date-utils";
 
 export class CubicJCoreSettingTab extends PluginSettingTab {
   plugin: CubicJCorePlugin;
@@ -13,6 +14,7 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     await this.displayFontSection(containerEl);
+    this.displayFrontmatterDatesSection(containerEl);
   }
 
   private async displayFontSection(containerEl: HTMLElement) {
@@ -69,5 +71,49 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
         });
       });
 
+  }
+
+  private displayFrontmatterDatesSection(containerEl: HTMLElement) {
+    new Setting(containerEl).setName("Frontmatter dates").setHeading();
+
+    const settings = this.plugin.settings.frontmatterDates;
+
+    new Setting(containerEl)
+      .setName("Manage note dates")
+      .setDesc("Keep created and modified frontmatter fields updated for personal notes.")
+      .addToggle((toggle) => {
+        toggle.setValue(settings.enabled).onChange(async (value) => {
+          settings.enabled = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Excluded paths")
+      .setDesc("One vault-relative folder per line.")
+      .addTextArea((text) => {
+        text.setValue(joinPathList(settings.excludedPaths)).onChange(async (value) => {
+          settings.excludedPaths = splitPathList(value);
+          await this.plugin.saveSettings();
+        });
+        text.inputEl.rows = 6;
+      });
+
+    new Setting(containerEl)
+      .setName("Backfill note dates")
+      .setDesc("Fill missing created and modified fields without overwriting existing values.")
+      .addButton((button) => {
+        button.setButtonText("Backfill").onClick(async () => {
+          button.setDisabled(true);
+          try {
+            const result = await this.plugin.frontmatterDates.backfillAll();
+            new Notice(
+              `Backfill complete: ${result.processed} processed, ${result.updated} updated, ${result.skipped} skipped, ${result.failed} failed`,
+            );
+          } finally {
+            button.setDisabled(false);
+          }
+        });
+      });
   }
 }
