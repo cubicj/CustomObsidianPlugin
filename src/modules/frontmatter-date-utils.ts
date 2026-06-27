@@ -104,6 +104,12 @@ export class DeferredModifiedWriteQueue {
     return ready;
   }
 
+  takePending(): PendingModifiedWrite | null {
+    const pending = this.pending;
+    this.pending = null;
+    return pending;
+  }
+
   clear(path: string) {
     if (this.pending?.path === path) {
       this.pending = null;

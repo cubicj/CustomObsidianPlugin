@@ -90,3 +90,19 @@ test("releases a deferred modified write after the active file changes", () => {
   });
   assert.equal(queue.takeReady("2. Hubs/other.md"), null);
 });
+
+test("drains a deferred modified write for plugin unload", () => {
+  const queue = new DeferredModifiedWriteQueue();
+  queue.set({
+    path: "1. Inbox/note.md",
+    createdMs: Date.UTC(2026, 5, 27, 0, 0, 0),
+    modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
+  });
+
+  assert.deepEqual(queue.takePending(), {
+    path: "1. Inbox/note.md",
+    createdMs: Date.UTC(2026, 5, 27, 0, 0, 0),
+    modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
+  });
+  assert.equal(queue.takePending(), null);
+});

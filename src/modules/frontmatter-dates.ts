@@ -82,6 +82,15 @@ export class FrontmatterDateManager {
     });
   }
 
+  async flushPendingModifiedWrite(): Promise<void> {
+    const write = this.deferredModifiedWrites.takePending();
+    if (!write) return;
+    const file = this.plugin.app.vault.getAbstractFileByPath(write.path);
+    if (!(file instanceof TFile)) return;
+    if (!this.settings.enabled || !shouldManagePath(file.path, this.settings)) return;
+    await this.processModifiedWrite(file, write);
+  }
+
   private async handleCreate(file: TAbstractFile) {
     if (!this.settings.enabled || !(file instanceof TFile)) return;
     if (!shouldManagePath(file.path, this.settings)) return;
