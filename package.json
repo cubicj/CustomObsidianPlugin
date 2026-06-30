@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "node esbuild.config.mjs",
-    "build": "node esbuild.config.mjs production"
+    "dev": "npm run dev:windows",
+    "build": "node esbuild.config.mjs production",
+    "watch": "node esbuild.config.mjs watch",
+    "copy:windows": "node esbuild.config.mjs copy:windows",
+    "deploy:windows": "npm run build && npm run copy:windows",
+    "dev:windows": "node esbuild.config.mjs watch:windows"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

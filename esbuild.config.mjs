@@ -1,22 +1,30 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "module";
-import { copyFileSync, mkdirSync } from "fs";
+import { copyPluginFiles, printPluginDeployPlan } from "./build/windows-plugin-target.mjs";
 
-const prod = process.argv[2] === "production";
-const VAULT_PLUGIN_DIR = "C:/[REDACTED]/.obsidian/plugins/cubicj-core";
+const mode = process.argv[2] ?? "watch";
+const prod = mode === "production";
+const copiesToVault = mode === "watch:windows";
 
 const copyToVault = {
   name: "copy-to-vault",
   setup(build) {
     build.onEnd((result) => {
       if (result.errors.length > 0) return;
-      mkdirSync(VAULT_PLUGIN_DIR, { recursive: true });
-      copyFileSync("main.js", `${VAULT_PLUGIN_DIR}/main.js`);
-      copyFileSync("manifest.json", `${VAULT_PLUGIN_DIR}/manifest.json`);
+      copyPluginFiles("dev:windows");
     });
   },
 };
+
+if (mode === "copy:windows") {
+  copyPluginFiles("copy:windows");
+  process.exit(0);
+}
+
+if (mode === "watch:windows") {
+  printPluginDeployPlan("dev:windows");
+}
 
 const context = await esbuild.context({
   entryPoints: ["src/main.ts"],
@@ -35,7 +43,7 @@ const context = await esbuild.context({
   treeShaking: true,
   outfile: "main.js",
   minify: prod,
-  plugins: [copyToVault],
+  plugins: copiesToVault ? [copyToVault] : [],
 });
 
 if (prod) {
