@@ -69,12 +69,42 @@ test("overwrites modified when handling a note edit", () => {
 });
 
 test("defers modified writes for the active file", () => {
-  assert.equal(shouldDeferModifiedWrite("1. Inbox/note.md", "1. Inbox/note.md"), true);
-  assert.equal(shouldDeferModifiedWrite("1. Inbox/note.md", "2. Hubs/other.md"), false);
-  assert.equal(shouldDeferModifiedWrite("1. Inbox/note.md", null), false);
+  assert.equal(shouldDeferModifiedWrite("1. Inbox/note.md", new Set(["1. Inbox/note.md"])), true);
+  assert.equal(shouldDeferModifiedWrite("1. Inbox/note.md", new Set(["2. Hubs/other.md"])), false);
+  assert.equal(shouldDeferModifiedWrite("1. Inbox/note.md", new Set()), false);
 });
 
-test("releases a deferred modified write after the active file changes", () => {
+test("keeps multiple deferred modified writes and releases only closed paths", () => {
+  const queue = new DeferredModifiedWriteQueue();
+  queue.set({
+    path: "1. Inbox/note.md",
+    createdMs: Date.UTC(2026, 5, 27, 0, 0, 0),
+    modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
+  });
+  queue.set({
+    path: "2. Hubs/other.md",
+    createdMs: Date.UTC(2026, 5, 27, 0, 0, 0),
+    modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
+  });
+
+  assert.deepEqual(queue.takeReady(new Set(["1. Inbox/note.md"])), [
+    {
+      path: "2. Hubs/other.md",
+      createdMs: Date.UTC(2026, 5, 27, 0, 0, 0),
+      modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
+    },
+  ]);
+  assert.deepEqual(queue.takeReady(new Set(["1. Inbox/note.md"])), []);
+  assert.deepEqual(queue.takeReady(new Set()), [
+    {
+      path: "1. Inbox/note.md",
+      createdMs: Date.UTC(2026, 5, 27, 0, 0, 0),
+      modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
+    },
+  ]);
+});
+
+test("rekeys a deferred modified write after rename", () => {
   const queue = new DeferredModifiedWriteQueue();
   queue.set({
     path: "1. Inbox/note.md",
@@ -82,16 +112,18 @@ test("releases a deferred modified write after the active file changes", () => {
     modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
   });
 
-  assert.equal(queue.takeReady("1. Inbox/note.md"), null);
-  assert.deepEqual(queue.takeReady("2. Hubs/other.md"), {
-    path: "1. Inbox/note.md",
-    createdMs: Date.UTC(2026, 5, 27, 0, 0, 0),
-    modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
-  });
-  assert.equal(queue.takeReady("2. Hubs/other.md"), null);
+  queue.rename("1. Inbox/note.md", "2. Hubs/renamed.md");
+
+  assert.deepEqual(queue.drain(), [
+    {
+      path: "2. Hubs/renamed.md",
+      createdMs: Date.UTC(2026, 5, 27, 0, 0, 0),
+      modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
+    },
+  ]);
 });
 
-test("drains a deferred modified write for plugin unload", () => {
+test("clears a deferred modified write by path", () => {
   const queue = new DeferredModifiedWriteQueue();
   queue.set({
     path: "1. Inbox/note.md",
@@ -99,10 +131,35 @@ test("drains a deferred modified write for plugin unload", () => {
     modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
   });
 
-  assert.deepEqual(queue.takePending(), {
+  queue.clear("1. Inbox/note.md");
+
+  assert.deepEqual(queue.drain(), []);
+});
+
+test("drains deferred modified writes once for plugin unload", () => {
+  const queue = new DeferredModifiedWriteQueue();
+  queue.set({
     path: "1. Inbox/note.md",
     createdMs: Date.UTC(2026, 5, 27, 0, 0, 0),
     modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
   });
-  assert.equal(queue.takePending(), null);
+  queue.set({
+    path: "2. Hubs/other.md",
+    createdMs: Date.UTC(2026, 5, 27, 0, 0, 0),
+    modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
+  });
+
+  assert.deepEqual(queue.drain(), [
+    {
+      path: "1. Inbox/note.md",
+      createdMs: Date.UTC(2026, 5, 27, 0, 0, 0),
+      modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
+    },
+    {
+      path: "2. Hubs/other.md",
+      createdMs: Date.UTC(2026, 5, 27, 0, 0, 0),
+      modifiedMs: Date.UTC(2026, 5, 27, 8, 45, 0),
+    },
+  ]);
+  assert.deepEqual(queue.drain(), []);
 });

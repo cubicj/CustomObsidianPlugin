@@ -86,33 +86,42 @@ export function applyDateFrontmatter(
   return changed;
 }
 
-export function shouldDeferModifiedWrite(filePath: string, activeFilePath: string | null | undefined): boolean {
-  return activeFilePath === filePath;
+export function shouldDeferModifiedWrite(filePath: string, openPaths: ReadonlySet<string>): boolean {
+  return openPaths.has(filePath);
 }
 
 export class DeferredModifiedWriteQueue {
-  private pending: PendingModifiedWrite | null = null;
+  private pending = new Map<string, PendingModifiedWrite>();
 
   set(write: PendingModifiedWrite) {
-    this.pending = write;
+    this.pending.set(write.path, write);
   }
 
-  takeReady(activeFilePath: string | null | undefined): PendingModifiedWrite | null {
-    if (!this.pending || this.pending.path === activeFilePath) return null;
-    const ready = this.pending;
-    this.pending = null;
+  takeReady(openPaths: ReadonlySet<string>): PendingModifiedWrite[] {
+    const ready: PendingModifiedWrite[] = [];
+    for (const [path, write] of this.pending) {
+      if (!openPaths.has(path)) {
+        ready.push(write);
+        this.pending.delete(path);
+      }
+    }
     return ready;
   }
 
-  takePending(): PendingModifiedWrite | null {
-    const pending = this.pending;
-    this.pending = null;
-    return pending;
+  drain(): PendingModifiedWrite[] {
+    const writes = Array.from(this.pending.values());
+    this.pending.clear();
+    return writes;
+  }
+
+  rename(oldPath: string, newPath: string) {
+    const write = this.pending.get(oldPath);
+    if (!write) return;
+    this.pending.delete(oldPath);
+    this.pending.set(newPath, { ...write, path: newPath });
   }
 
   clear(path: string) {
-    if (this.pending?.path === path) {
-      this.pending = null;
-    }
+    this.pending.delete(path);
   }
 }

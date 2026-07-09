@@ -1,4 +1,4 @@
-import { Notice, Plugin, TAbstractFile, TFile } from "obsidian";
+import { MarkdownView, Notice, Plugin, TAbstractFile, TFile } from "obsidian";
 import {
   applyDateFrontmatter,
   DeferredModifiedWriteQueue,
@@ -14,11 +14,10 @@ export interface BackfillResult {
   failed: number;
 }
 
-const PLUGIN_WRITE_GUARD_MS = 2000;
-
 export class FrontmatterDateManager {
-  private pluginWritePaths = new Set<string>();
+  private localEditPaths = new Set<string>();
   private deferredModifiedWrites = new DeferredModifiedWriteQueue();
+  private unloaded = false;
   private plugin: Plugin;
   private settings: FrontmatterDateSettings;
 
@@ -32,7 +31,11 @@ export class FrontmatterDateManager {
   }
 
   register() {
+    this.plugin.register(() => {
+      this.unloaded = true;
+    });
     this.plugin.app.workspace.onLayoutReady(() => {
+      if (this.unloaded) return;
       this.plugin.registerEvent(
         this.plugin.app.vault.on("create", (file) => {
           void this.handleCreate(file);
@@ -44,8 +47,31 @@ export class FrontmatterDateManager {
         }),
       );
       this.plugin.registerEvent(
-        this.plugin.app.workspace.on("file-open", (file) => {
-          void this.flushDeferredModifiedWrite(file?.path);
+        this.plugin.app.vault.on("rename", (file, oldPath) => {
+          void this.handleRename(file, oldPath);
+        }),
+      );
+      this.plugin.registerEvent(
+        this.plugin.app.vault.on("delete", (file) => {
+          this.deferredModifiedWrites.clear(file.path);
+          this.localEditPaths.delete(file.path);
+        }),
+      );
+      this.plugin.registerEvent(
+        this.plugin.app.workspace.on("editor-change", (editor, info) => {
+          if (info.file && editor.hasFocus()) {
+            this.localEditPaths.add(info.file.path);
+          }
+        }),
+      );
+      this.plugin.registerEvent(
+        this.plugin.app.workspace.on("file-open", () => {
+          void this.flushReady();
+        }),
+      );
+      this.plugin.registerEvent(
+        this.plugin.app.workspace.on("layout-change", () => {
+          void this.flushReady();
         }),
       );
     });
@@ -83,12 +109,13 @@ export class FrontmatterDateManager {
   }
 
   async flushPendingModifiedWrite(): Promise<void> {
-    const write = this.deferredModifiedWrites.takePending();
-    if (!write) return;
-    const file = this.plugin.app.vault.getAbstractFileByPath(write.path);
-    if (!(file instanceof TFile)) return;
-    if (!this.settings.enabled || !shouldManagePath(file.path, this.settings)) return;
-    await this.processModifiedWrite(file, write);
+    const writes = this.deferredModifiedWrites.drain();
+    for (const write of writes) {
+      const file = this.plugin.app.vault.getAbstractFileByPath(write.path);
+      if (!(file instanceof TFile)) continue;
+      if (!this.settings.enabled || !shouldManagePath(file.path, this.settings)) continue;
+      await this.processModifiedWrite(file, write);
+    }
   }
 
   private async handleCreate(file: TAbstractFile) {
@@ -104,32 +131,49 @@ export class FrontmatterDateManager {
   private async handleModify(file: TAbstractFile) {
     if (!this.settings.enabled || !(file instanceof TFile)) return;
     if (!shouldManagePath(file.path, this.settings)) return;
-    if (this.pluginWritePaths.has(file.path)) {
-      this.pluginWritePaths.delete(file.path);
-      return;
-    }
+    if (!this.localEditPaths.delete(file.path)) return;
     const modifiedWrite: PendingModifiedWrite = {
       path: file.path,
       createdMs: file.stat.ctime,
       modifiedMs: Date.now(),
     };
-    if (shouldDeferModifiedWrite(file.path, this.plugin.app.workspace.getActiveFile()?.path)) {
+    const openPaths = this.collectOpenMarkdownPaths();
+    if (shouldDeferModifiedWrite(file.path, openPaths)) {
       this.deferredModifiedWrites.set(modifiedWrite);
       return;
     }
     await this.processModifiedWrite(file, modifiedWrite);
   }
 
-  private async flushDeferredModifiedWrite(activeFilePath: string | null | undefined) {
-    const write = this.deferredModifiedWrites.takeReady(activeFilePath);
-    if (!write) return;
-    const file = this.plugin.app.vault.getAbstractFileByPath(write.path);
-    if (!(file instanceof TFile)) {
-      this.deferredModifiedWrites.clear(write.path);
-      return;
+  private async handleRename(file: TAbstractFile, oldPath: string) {
+    this.deferredModifiedWrites.rename(oldPath, file.path);
+    if (this.localEditPaths.delete(oldPath)) {
+      this.localEditPaths.add(file.path);
     }
-    if (!this.settings.enabled || !shouldManagePath(file.path, this.settings)) return;
-    await this.processModifiedWrite(file, write);
+    if (!this.settings.enabled || !(file instanceof TFile)) return;
+    if (!shouldManagePath(file.path, this.settings)) return;
+    if (this.hasDateFields(file)) return;
+    await this.backfillFile(file);
+  }
+
+  private collectOpenMarkdownPaths(): Set<string> {
+    const paths = new Set<string>();
+    for (const leaf of this.plugin.app.workspace.getLeavesOfType("markdown")) {
+      if (leaf.view instanceof MarkdownView && leaf.view.file) {
+        paths.add(leaf.view.file.path);
+      }
+    }
+    return paths;
+  }
+
+  private async flushReady() {
+    const writes = this.deferredModifiedWrites.takeReady(this.collectOpenMarkdownPaths());
+    for (const write of writes) {
+      const file = this.plugin.app.vault.getAbstractFileByPath(write.path);
+      if (!(file instanceof TFile)) continue;
+      if (!this.settings.enabled || !shouldManagePath(file.path, this.settings)) continue;
+      await this.processModifiedWrite(file, write);
+    }
   }
 
   private async processModifiedWrite(file: TFile, write: PendingModifiedWrite) {
@@ -142,25 +186,15 @@ export class FrontmatterDateManager {
 
   private async processFile(file: TFile, options: DateFrontmatterOptions): Promise<boolean> {
     let changed = false;
-    this.markPluginWrite(file.path);
     try {
       await this.plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
         changed = applyDateFrontmatter(frontmatter, this.settings, options);
       });
-      if (!changed) this.pluginWritePaths.delete(file.path);
       return changed;
     } catch (error) {
-      this.pluginWritePaths.delete(file.path);
       new Notice(String(error));
       throw error;
     }
-  }
-
-  private markPluginWrite(filePath: string) {
-    this.pluginWritePaths.add(filePath);
-    window.setTimeout(() => {
-      this.pluginWritePaths.delete(filePath);
-    }, PLUGIN_WRITE_GUARD_MS);
   }
 
   private hasDateFields(file: TFile): boolean {

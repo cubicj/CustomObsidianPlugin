@@ -18,22 +18,15 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
   }
 
   private async displayFontSection(containerEl: HTMLElement) {
-    containerEl.createEl("h2", { text: "Font Loader" });
+    new Setting(containerEl).setName("Font loader").setHeading();
 
     const fontSettings = this.plugin.settings.font;
-
-    if (!fontSettings.fontFolder || fontSettings.fontFolder.trim() === "") {
-      fontSettings.fontFolder = `${this.app.vault.configDir}/fonts/`;
-    }
-    if (!fontSettings.fontFolder.endsWith("/")) {
-      fontSettings.fontFolder += "/";
-    }
 
     new Setting(containerEl)
       .setName("Fonts folder")
       .setDesc("Folder to look for your custom fonts")
       .addText((text) => {
-        text.setValue(fontSettings.fontFolder).onChange(async (value) => {
+        text.setPlaceholder(`${this.app.vault.configDir}/fonts/`).setValue(fontSettings.fontFolder).onChange(async (value) => {
           fontSettings.fontFolder = value;
           await this.plugin.saveSettings();
         });
@@ -51,7 +44,7 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
       .addButton((btn) => {
         btn.setButtonText("Reload").onClick(async () => {
           await this.plugin.saveSettings();
-          await this.plugin.fontLoader.load(fontSettings);
+          await this.plugin.fontLoader.load(fontSettings, { refreshCache: true });
           this.display();
         });
       });
@@ -89,6 +82,17 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName("Managed folders")
+      .setDesc("One vault-relative folder per line.")
+      .addTextArea((text) => {
+        text.setValue(joinPathList(settings.managedFolders)).onChange(async (value) => {
+          settings.managedFolders = splitPathList(value);
+          await this.plugin.saveSettings();
+        });
+        text.inputEl.rows = 6;
+      });
+
+    new Setting(containerEl)
       .setName("Excluded paths")
       .setDesc("One vault-relative folder per line.")
       .addTextArea((text) => {
@@ -110,6 +114,8 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
             new Notice(
               `Backfill complete: ${result.processed} processed, ${result.updated} updated, ${result.skipped} skipped, ${result.failed} failed`,
             );
+          } catch (error) {
+            new Notice(String(error));
           } finally {
             button.setDisabled(false);
           }

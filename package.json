@@ -1,7 +1,10 @@
 {
   "name": "cubicj-core",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "dev": "npm run watch",
     "build": "node esbuild.config.mjs production",

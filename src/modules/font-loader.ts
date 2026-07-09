@@ -14,20 +14,20 @@ const FONT_BASE64_ID = "cubicj-font-base64";
 const FONT_GENERAL_ID = "cubicj-font-general";
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  let binary = "";
   const bytes = new Uint8Array(buffer);
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const chunks: string[] = [];
+  for (let i = 0; i < bytes.byteLength; i += 0x8000) {
+    chunks.push(String.fromCharCode(...bytes.subarray(i, i + 0x8000)));
   }
-  return btoa(binary);
+  return btoa(chunks.join(""));
 }
 
 function getMimeType(ext: string): string {
   switch (ext) {
     case "woff": return "font/woff";
     case "woff2": return "font/woff2";
-    case "ttf": return "font/truetype";
-    case "otf": return "font/opentype";
+    case "ttf": return "font/ttf";
+    case "otf": return "font/otf";
     default: return "font";
   }
 }
@@ -66,16 +66,16 @@ export class FontLoader {
     this.pluginFolder = `${app.vault.configDir}/plugins/cubicj-core`;
   }
 
-  async load(settings: FontSettings) {
+  async load(settings: FontSettings, options?: { refreshCache?: boolean }) {
     const fontFile = settings.fontFile;
     if (!fontFile || fontFile.toLowerCase() === "none") {
-      applyCss("", FONT_BASE64_ID);
-      applyCss("", FONT_GENERAL_ID);
+      removeCss(FONT_BASE64_ID);
+      removeCss(FONT_GENERAL_ID);
       return;
     }
 
     try {
-      await this.processFont(fontFile, settings);
+      await this.processFont(fontFile, settings, options);
     } catch (e) {
       new Notice(String(e));
     }
@@ -86,11 +86,12 @@ export class FontLoader {
     removeCss(FONT_GENERAL_ID);
   }
 
-  private async processFont(fileName: string, settings: FontSettings) {
-    const cssCachePath = `${this.pluginFolder}/${fileName.toLowerCase().replace(".", "_")}.css`;
+  private async processFont(fileName: string, settings: FontSettings, options?: { refreshCache?: boolean }) {
+    const { baseName } = this.getFontFileParts(fileName);
+    const cssCachePath = `${this.pluginFolder}/${baseName.replaceAll(".", "_")}.css`;
 
-    if (!(await this.app.vault.adapter.exists(cssCachePath))) {
-      await this.convertFontToCss(fileName, settings.fontFolder, cssCachePath);
+    if (options?.refreshCache || !(await this.app.vault.adapter.exists(cssCachePath))) {
+      await this.convertFontToCss(fileName, this.normalizeFontFolder(settings.fontFolder), cssCachePath);
     }
 
     const content = await this.app.vault.adapter.read(cssCachePath);
@@ -99,7 +100,7 @@ export class FontLoader {
   }
 
   private applyCssRules(fileName: string) {
-    const fontFamily = fileName.split(".")[0].toLowerCase();
+    const fontFamily = this.getFontFileParts(fileName).baseName;
     const css = getDefaultCss(fontFamily) + `\n* { font-family: '${fontFamily}' !important; }\n`;
     applyCss(css, FONT_GENERAL_ID);
   }
@@ -109,12 +110,11 @@ export class FontLoader {
     const filePath = `${fontFolder}${fileName}`;
     const arrayBuffer = await this.app.vault.adapter.readBinary(filePath);
     const base64 = arrayBufferToBase64(arrayBuffer);
-    const fontFamily = fileName.split(".")[0].toLowerCase();
-    const ext = fileName.split(".").pop()?.toLowerCase() || "";
-    const mimeType = getMimeType(ext);
+    const { baseName, extension } = this.getFontFileParts(fileName);
+    const mimeType = getMimeType(extension);
 
     const fontFaceCss = `@font-face{
-  font-family: '${fontFamily}';
+  font-family: '${baseName}';
   src: url(data:${mimeType};base64,${base64});
 }`;
 
@@ -123,16 +123,33 @@ export class FontLoader {
   }
 
   async listFonts(fontFolder: string): Promise<string[]> {
+    const normalizedFolder = this.normalizeFontFolder(fontFolder);
     try {
-      if (!(await this.app.vault.adapter.exists(fontFolder))) {
-        await this.app.vault.adapter.mkdir(fontFolder);
+      if (!(await this.app.vault.adapter.exists(normalizedFolder))) {
+        await this.app.vault.adapter.mkdir(normalizedFolder);
       }
-      const listing = await this.app.vault.adapter.list(fontFolder);
+      const listing = await this.app.vault.adapter.list(normalizedFolder);
       return listing.files
-        .map((f) => f.replace(fontFolder, ""))
+        .map((f) => f.startsWith(normalizedFolder) ? f.slice(normalizedFolder.length) : f)
         .filter((f) => !f.startsWith("."));
     } catch {
       return [];
     }
+  }
+
+  private normalizeFontFolder(fontFolder: string): string {
+    const folder = fontFolder.trim() || `${this.app.vault.configDir}/fonts/`;
+    return folder.endsWith("/") ? folder : `${folder}/`;
+  }
+
+  private getFontFileParts(fileName: string): { baseName: string; extension: string } {
+    const lastDot = fileName.lastIndexOf(".");
+    if (lastDot === -1) {
+      return { baseName: fileName.toLowerCase(), extension: "" };
+    }
+    return {
+      baseName: fileName.slice(0, lastDot).toLowerCase(),
+      extension: fileName.slice(lastDot + 1).toLowerCase(),
+    };
   }
 }

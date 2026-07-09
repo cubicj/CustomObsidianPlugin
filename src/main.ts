@@ -36,13 +36,13 @@ export default class CubicJCorePlugin extends Plugin {
   }
 
   async onunload() {
+    disableNoAutoFocus();
+    this.fontLoader?.unload();
     try {
       await this.frontmatterDates?.flushPendingModifiedWrite();
     } catch (error) {
       console.warn("CubicJ Core failed to flush pending frontmatter date", error);
     }
-    disableNoAutoFocus();
-    this.fontLoader?.unload();
     console.log("CubicJ Core unloaded");
   }
 
