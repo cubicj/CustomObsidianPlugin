@@ -32,7 +32,7 @@ const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 export function normalizeTrailingNewline(content: string): string | null {
   if (content.length === 0) return null;
-  const normalized = `${content.replace(/\s+$/, "")}\n`;
+  const normalized = `${content.replace(/(\n[ \t\r]*)+$/, "")}\n`;
   return normalized === content ? null : normalized;
 }
 

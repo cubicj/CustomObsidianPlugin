@@ -177,18 +177,24 @@ test("collapses multiple trailing newlines to one", () => {
   assert.equal(normalizeTrailingNewline("text\n\n\n"), "text\n");
 });
 
-test("strips trailing whitespace tails before the final newline", () => {
+test("removes whitespace-only trailing lines", () => {
   assert.equal(normalizeTrailingNewline("text\n  \n"), "text\n");
-  assert.equal(normalizeTrailingNewline("text  "), "text\n");
-  assert.equal(normalizeTrailingNewline("text\t\n \t\n"), "text\n");
+  assert.equal(normalizeTrailingNewline("text\t\n \t\n"), "text\t\n");
+});
+
+test("preserves trailing whitespace that belongs to the last content line", () => {
+  assert.equal(normalizeTrailingNewline("- [ ] \n"), null);
+  assert.equal(normalizeTrailingNewline("text\n- [ ] "), "text\n- [ ] \n");
+  assert.equal(normalizeTrailingNewline("text  \n"), null);
+  assert.equal(normalizeTrailingNewline("text  "), "text  \n");
 });
 
 test("leaves completely empty files untouched", () => {
   assert.equal(normalizeTrailingNewline(""), null);
 });
 
-test("reduces whitespace-only content to a single newline", () => {
-  assert.equal(normalizeTrailingNewline("  \n\n"), "\n");
+test("collapses newline tails of whitespace-only content", () => {
+  assert.equal(normalizeTrailingNewline("  \n\n"), "  \n");
   assert.equal(normalizeTrailingNewline("\n"), null);
 });
 
