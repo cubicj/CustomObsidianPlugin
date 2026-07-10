@@ -5,6 +5,7 @@ import {
   DeferredModifiedWriteQueue,
   DEFAULT_FRONTMATTER_DATE_SETTINGS,
   formatKstTimestamp,
+  normalizeTrailingNewline,
   shouldDeferModifiedWrite,
   shouldManagePath,
   splitPathList,
@@ -162,4 +163,42 @@ test("drains deferred modified writes once for plugin unload", () => {
     },
   ]);
   assert.deepEqual(queue.drain(), []);
+});
+
+test("appends a missing final newline", () => {
+  assert.equal(normalizeTrailingNewline("text"), "text\n");
+});
+
+test("returns null for already normalized content", () => {
+  assert.equal(normalizeTrailingNewline("text\n"), null);
+});
+
+test("collapses multiple trailing newlines to one", () => {
+  assert.equal(normalizeTrailingNewline("text\n\n\n"), "text\n");
+});
+
+test("strips trailing whitespace tails before the final newline", () => {
+  assert.equal(normalizeTrailingNewline("text\n  \n"), "text\n");
+  assert.equal(normalizeTrailingNewline("text  "), "text\n");
+  assert.equal(normalizeTrailingNewline("text\t\n \t\n"), "text\n");
+});
+
+test("leaves completely empty files untouched", () => {
+  assert.equal(normalizeTrailingNewline(""), null);
+});
+
+test("reduces whitespace-only content to a single newline", () => {
+  assert.equal(normalizeTrailingNewline("  \n\n"), "\n");
+  assert.equal(normalizeTrailingNewline("\n"), null);
+});
+
+test("normalizes frontmatter-only notes with the same rule", () => {
+  assert.equal(
+    normalizeTrailingNewline("---\ncreated: 2026-07-10T12:00:00+09:00\n---"),
+    "---\ncreated: 2026-07-10T12:00:00+09:00\n---\n",
+  );
+});
+
+test("defaults trailing newline normalization to enabled", () => {
+  assert.equal(DEFAULT_FRONTMATTER_DATE_SETTINGS.normalizeTrailingNewline, true);
 });

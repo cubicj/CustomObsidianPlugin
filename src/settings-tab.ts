@@ -82,6 +82,16 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName("Normalize trailing newline")
+      .setDesc("Keep locally edited notes ending with exactly one final newline.")
+      .addToggle((toggle) => {
+        toggle.setValue(settings.normalizeTrailingNewline).onChange(async (value) => {
+          settings.normalizeTrailingNewline = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
       .setName("Managed folders")
       .setDesc("One vault-relative folder per line.")
       .addTextArea((text) => {
@@ -113,6 +123,25 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
             const result = await this.plugin.frontmatterDates.backfillAll();
             new Notice(
               `Backfill complete: ${result.processed} processed, ${result.updated} updated, ${result.skipped} skipped, ${result.failed} failed`,
+            );
+          } catch (error) {
+            new Notice(String(error));
+          } finally {
+            button.setDisabled(false);
+          }
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Normalize note endings")
+      .setDesc("Rewrite managed notes so each ends with exactly one final newline. Does not update modified dates.")
+      .addButton((button) => {
+        button.setButtonText("Normalize").onClick(async () => {
+          button.setDisabled(true);
+          try {
+            const result = await this.plugin.frontmatterDates.normalizeAll();
+            new Notice(
+              `Normalize complete: ${result.processed} processed, ${result.updated} updated, ${result.skipped} skipped, ${result.failed} failed`,
             );
           } catch (error) {
             new Notice(String(error));

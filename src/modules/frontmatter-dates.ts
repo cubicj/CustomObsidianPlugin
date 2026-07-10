@@ -2,6 +2,7 @@ import { MarkdownView, Notice, Plugin, TAbstractFile, TFile } from "obsidian";
 import {
   applyDateFrontmatter,
   DeferredModifiedWriteQueue,
+  normalizeTrailingNewline,
   shouldDeferModifiedWrite,
   shouldManagePath,
 } from "./frontmatter-date-utils";
@@ -99,6 +100,29 @@ export class FrontmatterDateManager {
     return result;
   }
 
+  async normalizeAll(): Promise<BackfillResult> {
+    const result: BackfillResult = { processed: 0, updated: 0, skipped: 0, failed: 0 };
+    for (const file of this.plugin.app.vault.getMarkdownFiles()) {
+      if (!shouldManagePath(file.path, this.settings)) {
+        result.skipped++;
+        continue;
+      }
+      result.processed++;
+      try {
+        const content = await this.plugin.app.vault.cachedRead(file);
+        if (normalizeTrailingNewline(content) === null) {
+          result.skipped++;
+          continue;
+        }
+        await this.plugin.app.vault.process(file, (current) => normalizeTrailingNewline(current) ?? current);
+        result.updated++;
+      } catch {
+        result.failed++;
+      }
+    }
+    return result;
+  }
+
   async backfillFile(file: TFile): Promise<boolean> {
     if (this.hasDateFields(file)) return false;
     return this.processFile(file, {
@@ -182,6 +206,19 @@ export class FrontmatterDateManager {
       modifiedMs: write.modifiedMs,
       overwriteModified: true,
     });
+    await this.normalizeFileEnding(file);
+  }
+
+  private async normalizeFileEnding(file: TFile) {
+    if (!this.settings.normalizeTrailingNewline) return;
+    try {
+      const content = await this.plugin.app.vault.cachedRead(file);
+      if (normalizeTrailingNewline(content) === null) return;
+      await this.plugin.app.vault.process(file, (current) => normalizeTrailingNewline(current) ?? current);
+    } catch (error) {
+      new Notice(String(error));
+      throw error;
+    }
   }
 
   private async processFile(file: TFile, options: DateFrontmatterOptions): Promise<boolean> {
