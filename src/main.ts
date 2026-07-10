@@ -4,22 +4,30 @@ import { FontLoader, FontSettings, DEFAULT_FONT_SETTINGS } from "./modules/font-
 import { FrontmatterDateManager } from "./modules/frontmatter-dates";
 import { DEFAULT_FRONTMATTER_DATE_SETTINGS } from "./modules/frontmatter-date-utils";
 import type { FrontmatterDateSettings } from "./modules/frontmatter-date-utils";
+import {
+  DEFAULT_FOLD_PROPERTIES_SETTINGS,
+  FoldPropertiesManager,
+} from "./modules/fold-properties";
+import type { FoldPropertiesSettings } from "./modules/fold-properties";
 import { CubicJCoreSettingTab } from "./settings-tab";
 
 interface CubicJCoreSettings {
   font: FontSettings;
   frontmatterDates: FrontmatterDateSettings;
+  foldProperties: FoldPropertiesSettings;
 }
 
 const DEFAULT_SETTINGS: CubicJCoreSettings = {
   font: DEFAULT_FONT_SETTINGS,
   frontmatterDates: DEFAULT_FRONTMATTER_DATE_SETTINGS,
+  foldProperties: DEFAULT_FOLD_PROPERTIES_SETTINGS,
 };
 
 export default class CubicJCorePlugin extends Plugin {
   settings!: CubicJCoreSettings;
   fontLoader!: FontLoader;
   frontmatterDates!: FrontmatterDateManager;
+  foldProperties!: FoldPropertiesManager;
 
   async onload() {
     await this.loadSettings();
@@ -30,6 +38,9 @@ export default class CubicJCorePlugin extends Plugin {
 
     this.frontmatterDates = new FrontmatterDateManager(this, this.settings.frontmatterDates);
     this.frontmatterDates.register();
+
+    this.foldProperties = new FoldPropertiesManager(this, this.settings.foldProperties);
+    this.foldProperties.register();
 
     this.addSettingTab(new CubicJCoreSettingTab(this.app, this));
     console.log("CubicJ Core loaded");
@@ -54,10 +65,16 @@ export default class CubicJCorePlugin extends Plugin {
       DEFAULT_FRONTMATTER_DATE_SETTINGS,
       this.settings.frontmatterDates,
     );
+    this.settings.foldProperties = Object.assign(
+      {},
+      DEFAULT_FOLD_PROPERTIES_SETTINGS,
+      this.settings.foldProperties,
+    );
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
     this.frontmatterDates?.updateSettings(this.settings.frontmatterDates);
+    this.foldProperties?.updateSettings(this.settings.foldProperties);
   }
 }

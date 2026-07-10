@@ -15,6 +15,7 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
     containerEl.empty();
     await this.displayFontSection(containerEl);
     this.displayFrontmatterDatesSection(containerEl);
+    this.displayFoldPropertiesSection(containerEl);
   }
 
   private async displayFontSection(containerEl: HTMLElement) {
@@ -148,6 +149,20 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
           } finally {
             button.setDisabled(false);
           }
+        });
+      });
+  }
+
+  private displayFoldPropertiesSection(containerEl: HTMLElement) {
+    new Setting(containerEl).setName("Fold properties").setHeading();
+
+    new Setting(containerEl)
+      .setName("Fold properties by default")
+      .setDesc("Collapse the properties block when a note opens. Expanding a note keeps it open while it stays loaded.")
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.foldProperties.enabled).onChange(async (value) => {
+          this.plugin.settings.foldProperties.enabled = value;
+          await this.plugin.saveSettings();
         });
       });
   }
