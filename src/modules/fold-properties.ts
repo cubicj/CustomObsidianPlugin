@@ -46,14 +46,23 @@ export class FoldPropertiesManager {
     if (!this.tracker.shouldFold(view, file.path)) {
       return;
     }
-    this.tracker.markFolded(view, file.path);
-    this.foldIfExpanded(view);
+    if (!this.tryFold(view, file.path)) {
+      requestAnimationFrame(() => {
+        if (view.file?.path === file.path && this.tracker.shouldFold(view, file.path)) {
+          this.tryFold(view, file.path);
+        }
+      });
+    }
   }
 
-  private foldIfExpanded(view: MarkdownView): void {
+  private tryFold(view: MarkdownView, path: string): boolean {
     const container = view.containerEl.querySelector(".metadata-container");
-    if (!container || container.classList.contains("is-collapsed")) {
-      return;
+    if (!container) {
+      return false;
+    }
+    this.tracker.markFolded(view, path);
+    if (container.classList.contains("is-collapsed")) {
+      return true;
     }
     const commands = (this.plugin.app as unknown as AppWithCommands).commands;
     const executed = commands.executeCommandById("editor:toggle-fold-properties");
@@ -61,5 +70,6 @@ export class FoldPropertiesManager {
       const heading = container.querySelector<HTMLElement>(".metadata-properties-heading");
       heading?.click();
     }
+    return true;
   }
 }
