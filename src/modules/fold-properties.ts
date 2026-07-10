@@ -7,6 +7,12 @@ interface AppWithCommands {
   };
 }
 
+interface ViewWithMetadataEditor {
+  metadataEditor?: {
+    setCollapse?(collapsed: boolean, animate: boolean): void;
+  };
+}
+
 const OBSERVE_TIMEOUT_MS = 2000;
 
 export interface FoldPropertiesSettings {
@@ -97,6 +103,11 @@ export class FoldPropertiesManager {
     }
     this.tracker.markFolded(view, path);
     if (container.classList.contains("is-collapsed")) {
+      return true;
+    }
+    const metadataEditor = (view as unknown as ViewWithMetadataEditor).metadataEditor;
+    if (typeof metadataEditor?.setCollapse === "function") {
+      metadataEditor.setCollapse(true, false);
       return true;
     }
     const commands = (this.plugin.app as unknown as AppWithCommands).commands;
