@@ -1,40 +1,33 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ViewFoldTracker } from "./fold-properties-utils.ts";
+import { injectPropertiesFold } from "./fold-properties-utils.ts";
 
-test("folds a view the first time it loads a file", () => {
-  const tracker = new ViewFoldTracker();
-  const view = {};
-  assert.equal(tracker.shouldFold(view, "1. Inbox/example.md"), true);
+test("builds minimal fold info for null input", () => {
+  assert.deepEqual(injectPropertiesFold(null), { folds: [{ from: 0, to: 0 }] });
 });
 
-test("does not re-fold while the same file stays loaded in the view", () => {
-  const tracker = new ViewFoldTracker();
-  const view = {};
-  tracker.markFolded(view, "1. Inbox/example.md");
-  assert.equal(tracker.shouldFold(view, "1. Inbox/example.md"), false);
+test("builds minimal fold info for undefined input", () => {
+  assert.deepEqual(injectPropertiesFold(undefined), { folds: [{ from: 0, to: 0 }] });
 });
 
-test("folds again when the view loads a different file", () => {
-  const tracker = new ViewFoldTracker();
-  const view = {};
-  tracker.markFolded(view, "1. Inbox/example.md");
-  assert.equal(tracker.shouldFold(view, "2. Hubs/topic.md"), true);
+test("adds a folds array while preserving unknown fields", () => {
+  assert.deepEqual(injectPropertiesFold({ lines: 12 }), {
+    lines: 12,
+    folds: [{ from: 0, to: 0 }],
+  });
 });
 
-test("folds again when the view returns to a previously loaded file", () => {
-  const tracker = new ViewFoldTracker();
-  const view = {};
-  tracker.markFolded(view, "1. Inbox/example.md");
-  tracker.markFolded(view, "2. Hubs/topic.md");
-  assert.equal(tracker.shouldFold(view, "1. Inbox/example.md"), true);
+test("passes through fold info that already collapses properties", () => {
+  const info = { folds: [{ from: 0, to: 0 }, { from: 3, to: 5 }], lines: 20 };
+  assert.deepEqual(injectPropertiesFold(info), info);
 });
 
-test("tracks views independently for the same file", () => {
-  const tracker = new ViewFoldTracker();
-  const viewA = {};
-  const viewB = {};
-  tracker.markFolded(viewA, "1. Inbox/example.md");
-  assert.equal(tracker.shouldFold(viewB, "1. Inbox/example.md"), true);
-  assert.equal(tracker.shouldFold(viewA, "1. Inbox/example.md"), false);
+test("prepends the properties fold without mutating the input", () => {
+  const info = { folds: [{ from: 3, to: 5 }], lines: 20 };
+  const result = injectPropertiesFold(info);
+  assert.deepEqual(result, {
+    folds: [{ from: 0, to: 0 }, { from: 3, to: 5 }],
+    lines: 20,
+  });
+  assert.deepEqual(info, { folds: [{ from: 3, to: 5 }], lines: 20 });
 });

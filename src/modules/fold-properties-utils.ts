@@ -1,11 +1,22 @@
-export class ViewFoldTracker {
-  private foldedPathByView = new WeakMap<object, string>();
+export interface FoldRange {
+  from: number;
+  to: number;
+}
 
-  shouldFold(view: object, path: string): boolean {
-    return this.foldedPathByView.get(view) !== path;
-  }
+type FoldInfoRecord = { [key: string]: unknown };
 
-  markFolded(view: object, path: string): void {
-    this.foldedPathByView.set(view, path);
+export function injectPropertiesFold(info: unknown): FoldInfoRecord & { folds: FoldRange[] } {
+  const propertiesFold: FoldRange = { from: 0, to: 0 };
+  if (typeof info !== "object" || info === null) {
+    return { folds: [propertiesFold] };
   }
+  const record = info as FoldInfoRecord;
+  const folds = Array.isArray(record.folds) ? (record.folds as FoldRange[]) : null;
+  if (!folds) {
+    return { ...record, folds: [propertiesFold] };
+  }
+  if (folds.some((fold) => fold && fold.from === 0)) {
+    return { ...record, folds };
+  }
+  return { ...record, folds: [propertiesFold, ...folds] };
 }
