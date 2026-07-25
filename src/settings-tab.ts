@@ -16,6 +16,7 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
     await this.displayFontSection(containerEl);
     this.displayFrontmatterDatesSection(containerEl);
     this.displayFoldPropertiesSection(containerEl);
+    this.displayVaultReplaceSection(containerEl);
   }
 
   private async displayFontSection(containerEl: HTMLElement) {
@@ -162,6 +163,20 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.foldProperties.enabled).onChange(async (value) => {
           this.plugin.settings.foldProperties.enabled = value;
+          await this.plugin.saveSettings();
+        });
+      });
+  }
+
+  private displayVaultReplaceSection(containerEl: HTMLElement) {
+    new Setting(containerEl).setName("Vault replace").setHeading();
+
+    new Setting(containerEl)
+      .setName("Find and replace in all files")
+      .setDesc("Register the vault-wide find and replace command and its Mod+Shift+H hotkey.")
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.vaultReplace.enabled).onChange(async (value) => {
+          this.plugin.settings.vaultReplace.enabled = value;
           await this.plugin.saveSettings();
         });
       });

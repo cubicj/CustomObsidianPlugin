@@ -9,18 +9,25 @@ import {
   FoldPropertiesManager,
 } from "./modules/fold-properties";
 import type { FoldPropertiesSettings } from "./modules/fold-properties";
+import {
+  DEFAULT_VAULT_REPLACE_SETTINGS,
+  VaultReplaceManager,
+} from "./modules/vault-replace";
+import type { VaultReplaceSettings } from "./modules/vault-replace";
 import { CubicJCoreSettingTab } from "./settings-tab";
 
 interface CubicJCoreSettings {
   font: FontSettings;
   frontmatterDates: FrontmatterDateSettings;
   foldProperties: FoldPropertiesSettings;
+  vaultReplace: VaultReplaceSettings;
 }
 
 const DEFAULT_SETTINGS: CubicJCoreSettings = {
   font: DEFAULT_FONT_SETTINGS,
   frontmatterDates: DEFAULT_FRONTMATTER_DATE_SETTINGS,
   foldProperties: DEFAULT_FOLD_PROPERTIES_SETTINGS,
+  vaultReplace: DEFAULT_VAULT_REPLACE_SETTINGS,
 };
 
 export default class CubicJCorePlugin extends Plugin {
@@ -28,6 +35,7 @@ export default class CubicJCorePlugin extends Plugin {
   fontLoader!: FontLoader;
   frontmatterDates!: FrontmatterDateManager;
   foldProperties!: FoldPropertiesManager;
+  vaultReplace!: VaultReplaceManager;
 
   async onload() {
     await this.loadSettings();
@@ -41,6 +49,9 @@ export default class CubicJCorePlugin extends Plugin {
 
     this.foldProperties = new FoldPropertiesManager(this, this.settings.foldProperties);
     this.foldProperties.register();
+
+    this.vaultReplace = new VaultReplaceManager(this, this.settings.vaultReplace);
+    this.vaultReplace.register();
 
     this.addSettingTab(new CubicJCoreSettingTab(this.app, this));
     console.log("CubicJ Core loaded");
@@ -70,11 +81,17 @@ export default class CubicJCorePlugin extends Plugin {
       DEFAULT_FOLD_PROPERTIES_SETTINGS,
       this.settings.foldProperties,
     );
+    this.settings.vaultReplace = Object.assign(
+      {},
+      DEFAULT_VAULT_REPLACE_SETTINGS,
+      this.settings.vaultReplace,
+    );
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
     this.frontmatterDates?.updateSettings(this.settings.frontmatterDates);
     this.foldProperties?.updateSettings(this.settings.foldProperties);
+    this.vaultReplace?.updateSettings(this.settings.vaultReplace);
   }
 }
