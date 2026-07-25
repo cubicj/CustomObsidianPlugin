@@ -95,7 +95,7 @@ export class VaultReplaceManager {
       }
       this.plugin.addCommand({
         id: VAULT_REPLACE_COMMAND_ID,
-        name: "Find and replace in all files",
+        name: "전체 파일 찾아 바꾸기",
         hotkeys: [{ modifiers: ["Mod", "Shift"], key: "H" }],
         callback: () => {
           new VaultReplaceModal(this.plugin.app, this).open();

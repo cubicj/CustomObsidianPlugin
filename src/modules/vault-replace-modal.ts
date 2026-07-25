@@ -5,6 +5,22 @@ import type { FileMatches, VaultReplaceManager } from "./vault-replace";
 export const VAULT_REPLACE_STYLE_ID = "cubicj-vault-replace";
 
 export const VAULT_REPLACE_STYLES = `
+.cubicj-vault-replace.modal {
+  --dialog-width: min(900px, 92vw);
+  --modal-width: min(900px, 92vw);
+  --modal-max-width: min(900px, 92vw);
+  width: min(900px, 92vw);
+  max-width: min(900px, 92vw);
+}
+.cubicj-vault-replace .cubicj-vr-field .setting-item-info {
+  flex: 0 0 auto;
+}
+.cubicj-vault-replace .cubicj-vr-field .setting-item-control {
+  flex: 1 1 auto;
+}
+.cubicj-vault-replace .cubicj-vr-field input[type="text"] {
+  width: 100%;
+}
 .cubicj-vault-replace .cubicj-vr-results {
   max-height: 40vh;
   overflow-y: auto;
@@ -81,30 +97,30 @@ export class VaultReplaceModal extends Modal {
     const { contentEl, modalEl } = this;
     modalEl.addClass("cubicj-vault-replace");
     contentEl.empty();
-    contentEl.createEl("h3", { text: "Find and replace in all files" });
+    contentEl.createEl("h3", { text: "전체 파일 찾아 바꾸기" });
 
-    new Setting(contentEl).setName("Find").addText((text) => {
-      text.setPlaceholder("Search text").onChange((value) => {
+    new Setting(contentEl).setName("찾기").setClass("cubicj-vr-field").addText((text) => {
+      text.setPlaceholder("찾을 내용").onChange((value) => {
         this.findValue = value;
         this.scheduleScan();
       });
       window.setTimeout(() => text.inputEl.focus(), 0);
     });
 
-    new Setting(contentEl).setName("Replace").addText((text) => {
-      text.setPlaceholder("Replacement text").onChange((value) => {
+    new Setting(contentEl).setName("바꾸기").setClass("cubicj-vr-field").addText((text) => {
+      text.setPlaceholder("바꿀 내용").onChange((value) => {
         this.replaceValue = value;
       });
     });
 
-    new Setting(contentEl).setName("Match case").addToggle((toggle) => {
+    new Setting(contentEl).setName("대소문자 구분").addToggle((toggle) => {
       toggle.setValue(this.caseSensitive).onChange((value) => {
         this.caseSensitive = value;
         this.scheduleScan();
       });
     });
 
-    new Setting(contentEl).setName("Regular expression").addToggle((toggle) => {
+    new Setting(contentEl).setName("정규식").addToggle((toggle) => {
       toggle.setValue(this.useRegex).onChange((value) => {
         this.useRegex = value;
         this.scheduleScan();
@@ -116,13 +132,13 @@ export class VaultReplaceModal extends Modal {
     this.resultsEl = contentEl.createDiv({ cls: "cubicj-vr-results" });
     contentEl.createDiv({
       cls: "cubicj-vr-warning",
-      text: "Replacing rewrites files on disk and cannot be undone.",
+      text: "치환한 내용은 디스크에 바로 기록되며 되돌릴 수 없습니다.",
     });
 
     new Setting(contentEl).addButton((button) => {
       this.applyButton = button;
       button
-        .setButtonText("Replace")
+        .setButtonText("바꾸기")
         .setCta()
         .setDisabled(true)
         .onClick(() => {
@@ -166,7 +182,7 @@ export class VaultReplaceModal extends Modal {
       useRegex: this.useRegex,
     });
     if (!matcher.ok) {
-      this.errorMessage = matcher.error;
+      this.errorMessage = `정규식 오류: ${matcher.error}`;
       this.render();
       return;
     }
@@ -190,13 +206,13 @@ export class VaultReplaceModal extends Modal {
     }
 
     if (this.results.length === 0) {
-      this.summaryEl.setText("No matches");
+      this.summaryEl.setText("일치하는 항목 없음");
       this.updateApplyButton();
       return;
     }
 
     const totalMatches = this.results.reduce((sum, item) => sum + item.matches.length, 0);
-    this.summaryEl.setText(`${this.results.length} files, ${totalMatches} matches`);
+    this.summaryEl.setText(`${this.results.length}개 파일, ${totalMatches}개 매치`);
 
     for (const item of this.results) {
       const fileEl = this.resultsEl.createDiv({ cls: "cubicj-vr-file" });
@@ -230,7 +246,7 @@ export class VaultReplaceModal extends Modal {
       if (item.matches.length > PREVIEW_LIMIT) {
         fileEl.createDiv({
           cls: "cubicj-vr-preview",
-          text: `+${item.matches.length - PREVIEW_LIMIT} more`,
+          text: `+${item.matches.length - PREVIEW_LIMIT}개 더`,
         });
       }
     }
@@ -245,7 +261,7 @@ export class VaultReplaceModal extends Modal {
   private updateApplyButton(): void {
     const selected = this.selectedResults();
     this.applyButton.setButtonText(
-      selected.length > 0 ? `Replace in ${selected.length} files` : "Replace",
+      selected.length > 0 ? `${selected.length}개 파일에 적용` : "바꾸기",
     );
     this.applyButton.setDisabled(selected.length === 0);
   }
@@ -260,7 +276,7 @@ export class VaultReplaceModal extends Modal {
       useRegex: this.useRegex,
     });
     if (!matcher.ok) {
-      this.errorMessage = matcher.error;
+      this.errorMessage = `정규식 오류: ${matcher.error}`;
       this.render();
       return;
     }
@@ -272,8 +288,8 @@ export class VaultReplaceModal extends Modal {
         this.replaceValue,
         this.useRegex,
       );
-      const failedSuffix = result.failed > 0 ? `, ${result.failed} failed` : "";
-      new Notice(`Replaced ${result.matches} matches in ${result.files} files${failedSuffix}`);
+      const failedSuffix = result.failed > 0 ? `, ${result.failed}개 실패` : "";
+      new Notice(`${result.files}개 파일에서 ${result.matches}개 매치를 바꿨습니다${failedSuffix}`);
       this.close();
     } catch (error) {
       new Notice(String(error));
