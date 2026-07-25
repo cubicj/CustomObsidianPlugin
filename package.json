@@ -9,7 +9,7 @@
     "dev": "npm run watch",
     "build": "node esbuild.config.mjs production",
     "watch": "node esbuild.config.mjs watch",
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/modules/frontmatter-dates.test.mjs src/modules/fold-properties.test.mjs",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/modules/frontmatter-dates.test.mjs src/modules/fold-properties.test.mjs src/modules/vault-replace.test.mjs",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run build",
     "copy:windows": "node esbuild.config.mjs copy:windows",
