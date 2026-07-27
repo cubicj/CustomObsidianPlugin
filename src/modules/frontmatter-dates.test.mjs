@@ -5,7 +5,6 @@ import {
   DeferredModifiedWriteQueue,
   DEFAULT_FRONTMATTER_DATE_SETTINGS,
   formatKstTimestamp,
-  normalizeTrailingNewline,
   shouldDeferModifiedWrite,
   shouldManagePath,
   splitPathList,
@@ -163,48 +162,4 @@ test("drains deferred modified writes once for plugin unload", () => {
     },
   ]);
   assert.deepEqual(queue.drain(), []);
-});
-
-test("appends a missing final newline", () => {
-  assert.equal(normalizeTrailingNewline("text"), "text\n");
-});
-
-test("returns null for already normalized content", () => {
-  assert.equal(normalizeTrailingNewline("text\n"), null);
-});
-
-test("collapses multiple trailing newlines to one", () => {
-  assert.equal(normalizeTrailingNewline("text\n\n\n"), "text\n");
-});
-
-test("removes whitespace-only trailing lines", () => {
-  assert.equal(normalizeTrailingNewline("text\n  \n"), "text\n");
-  assert.equal(normalizeTrailingNewline("text\t\n \t\n"), "text\t\n");
-});
-
-test("preserves trailing whitespace that belongs to the last content line", () => {
-  assert.equal(normalizeTrailingNewline("- [ ] \n"), null);
-  assert.equal(normalizeTrailingNewline("text\n- [ ] "), "text\n- [ ] \n");
-  assert.equal(normalizeTrailingNewline("text  \n"), null);
-  assert.equal(normalizeTrailingNewline("text  "), "text  \n");
-});
-
-test("leaves completely empty files untouched", () => {
-  assert.equal(normalizeTrailingNewline(""), null);
-});
-
-test("collapses newline tails of whitespace-only content", () => {
-  assert.equal(normalizeTrailingNewline("  \n\n"), "  \n");
-  assert.equal(normalizeTrailingNewline("\n"), null);
-});
-
-test("normalizes frontmatter-only notes with the same rule", () => {
-  assert.equal(
-    normalizeTrailingNewline("---\ncreated: 2026-07-10T12:00:00+09:00\n---"),
-    "---\ncreated: 2026-07-10T12:00:00+09:00\n---\n",
-  );
-});
-
-test("defaults trailing newline normalization to enabled", () => {
-  assert.equal(DEFAULT_FRONTMATTER_DATE_SETTINGS.normalizeTrailingNewline, true);
 });

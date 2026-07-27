@@ -4,6 +4,8 @@ import { FontLoader, FontSettings, DEFAULT_FONT_SETTINGS } from "./modules/font-
 import { FrontmatterDateManager } from "./modules/frontmatter-dates";
 import { DEFAULT_FRONTMATTER_DATE_SETTINGS } from "./modules/frontmatter-date-utils";
 import type { FrontmatterDateSettings } from "./modules/frontmatter-date-utils";
+import { DEFAULT_NOTE_FORMAT_SETTINGS } from "./modules/note-format-utils";
+import type { NoteFormatSettings } from "./modules/note-format-utils";
 import {
   DEFAULT_FOLD_PROPERTIES_SETTINGS,
   FoldPropertiesManager,
@@ -19,6 +21,7 @@ import { CubicJCoreSettingTab } from "./settings-tab";
 interface CubicJCoreSettings {
   font: FontSettings;
   frontmatterDates: FrontmatterDateSettings;
+  noteFormat: NoteFormatSettings;
   foldProperties: FoldPropertiesSettings;
   vaultReplace: VaultReplaceSettings;
 }
@@ -26,6 +29,7 @@ interface CubicJCoreSettings {
 const DEFAULT_SETTINGS: CubicJCoreSettings = {
   font: DEFAULT_FONT_SETTINGS,
   frontmatterDates: DEFAULT_FRONTMATTER_DATE_SETTINGS,
+  noteFormat: DEFAULT_NOTE_FORMAT_SETTINGS,
   foldProperties: DEFAULT_FOLD_PROPERTIES_SETTINGS,
   vaultReplace: DEFAULT_VAULT_REPLACE_SETTINGS,
 };
@@ -44,7 +48,11 @@ export default class CubicJCorePlugin extends Plugin {
     this.fontLoader = new FontLoader(this.app);
     await this.fontLoader.load(this.settings.font);
 
-    this.frontmatterDates = new FrontmatterDateManager(this, this.settings.frontmatterDates);
+    this.frontmatterDates = new FrontmatterDateManager(
+      this,
+      this.settings.frontmatterDates,
+      this.settings.noteFormat,
+    );
     this.frontmatterDates.register();
 
     this.foldProperties = new FoldPropertiesManager(this, this.settings.foldProperties);
@@ -69,13 +77,25 @@ export default class CubicJCorePlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const data = (await this.loadData()) as Record<string, unknown> | null;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
     this.settings.font = Object.assign({}, DEFAULT_FONT_SETTINGS, this.settings.font);
     this.settings.frontmatterDates = Object.assign(
       {},
       DEFAULT_FRONTMATTER_DATE_SETTINGS,
       this.settings.frontmatterDates,
     );
+    this.settings.noteFormat = Object.assign(
+      {},
+      DEFAULT_NOTE_FORMAT_SETTINGS,
+      this.settings.noteFormat,
+    );
+    const legacyDates = data?.frontmatterDates as { normalizeTrailingNewline?: unknown } | undefined;
+    if (data?.noteFormat === undefined && typeof legacyDates?.normalizeTrailingNewline === "boolean") {
+      this.settings.noteFormat.normalizeTrailingNewline = legacyDates.normalizeTrailingNewline;
+    }
+    delete (this.settings.frontmatterDates as { normalizeTrailingNewline?: boolean })
+      .normalizeTrailingNewline;
     this.settings.foldProperties = Object.assign(
       {},
       DEFAULT_FOLD_PROPERTIES_SETTINGS,
@@ -90,7 +110,7 @@ export default class CubicJCorePlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
-    this.frontmatterDates?.updateSettings(this.settings.frontmatterDates);
+    this.frontmatterDates?.updateSettings(this.settings.frontmatterDates, this.settings.noteFormat);
     this.foldProperties?.updateSettings(this.settings.foldProperties);
     this.vaultReplace?.updateSettings(this.settings.vaultReplace);
   }

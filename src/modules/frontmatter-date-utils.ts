@@ -4,7 +4,6 @@ export interface FrontmatterDateSettings {
   modifiedField: string;
   managedFolders: string[];
   excludedPaths: string[];
-  normalizeTrailingNewline: boolean;
 }
 
 export interface DateFrontmatterOptions {
@@ -25,16 +24,9 @@ export const DEFAULT_FRONTMATTER_DATE_SETTINGS: FrontmatterDateSettings = {
   modifiedField: "modified",
   managedFolders: ["1. Inbox/", "2. Hubs/", "3. Resources/", "4. Daily Note/"],
   excludedPaths: [".obsidian/", ".trash/", "Templates/", "Attached Files/", "cubicj-brewing/"],
-  normalizeTrailingNewline: true,
 };
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
-
-export function normalizeTrailingNewline(content: string): string | null {
-  if (content.length === 0) return null;
-  const normalized = `${content.replace(/(\n[ \t\r]*)+$/, "")}\n`;
-  return normalized === content ? null : normalized;
-}
 
 export function formatKstTimestamp(ms: number): string {
   const date = new Date(ms + KST_OFFSET_MS);

@@ -15,6 +15,7 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
     containerEl.empty();
     await this.displayFontSection(containerEl);
     this.displayFrontmatterDatesSection(containerEl);
+    this.displayNoteFormatSection(containerEl);
     this.displayFoldPropertiesSection(containerEl);
     this.displayVaultReplaceSection(containerEl);
   }
@@ -65,7 +66,6 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
           this.display();
         });
       });
-
   }
 
   private displayFrontmatterDatesSection(containerEl: HTMLElement) {
@@ -79,16 +79,6 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
       .addToggle((toggle) => {
         toggle.setValue(settings.enabled).onChange(async (value) => {
           settings.enabled = value;
-          await this.plugin.saveSettings();
-        });
-      });
-
-    new Setting(containerEl)
-      .setName("Normalize trailing newline")
-      .setDesc("Keep locally edited notes ending with exactly one final newline.")
-      .addToggle((toggle) => {
-        toggle.setValue(settings.normalizeTrailingNewline).onChange(async (value) => {
-          settings.normalizeTrailingNewline = value;
           await this.plugin.saveSettings();
         });
       });
@@ -133,17 +123,63 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
           }
         });
       });
+  }
+
+  private displayNoteFormatSection(containerEl: HTMLElement) {
+    new Setting(containerEl).setName("Markdown formatting").setHeading();
+
+    const settings = this.plugin.settings.noteFormat;
 
     new Setting(containerEl)
-      .setName("Normalize note endings")
-      .setDesc("Rewrite managed notes so each ends with exactly one final newline. Does not update modified dates.")
+      .setName("Normalize trailing newline")
+      .setDesc("Keep locally edited notes ending with exactly one final newline.")
+      .addToggle((toggle) => {
+        toggle.setValue(settings.normalizeTrailingNewline).onChange(async (value) => {
+          settings.normalizeTrailingNewline = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Blank lines around headings")
+      .setDesc("Keep one blank line before and after each heading. Code blocks and frontmatter are left alone.")
+      .addToggle((toggle) => {
+        toggle.setValue(settings.blankLinesAroundHeadings).onChange(async (value) => {
+          settings.blankLinesAroundHeadings = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Collapse blank lines")
+      .setDesc("Reduce runs of two or more blank lines to one. Code blocks are left alone.")
+      .addToggle((toggle) => {
+        toggle.setValue(settings.collapseBlankLines).onChange(async (value) => {
+          settings.collapseBlankLines = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Blank line after heading on Enter")
+      .setDesc("Pressing Enter at the end of a heading inserts one blank line and moves the cursor below it.")
+      .addToggle((toggle) => {
+        toggle.setValue(settings.headingEnterBlankLine).onChange(async (value) => {
+          settings.headingEnterBlankLine = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Format notes")
+      .setDesc("Rewrite managed notes with every enabled formatting rule. Does not update modified dates.")
       .addButton((button) => {
-        button.setButtonText("Normalize").onClick(async () => {
+        button.setButtonText("Format").onClick(async () => {
           button.setDisabled(true);
           try {
-            const result = await this.plugin.frontmatterDates.normalizeAll();
+            const result = await this.plugin.frontmatterDates.formatAll();
             new Notice(
-              `Normalize complete: ${result.processed} processed, ${result.updated} updated, ${result.skipped} skipped, ${result.failed} failed`,
+              `Format complete: ${result.processed} processed, ${result.updated} updated, ${result.skipped} skipped, ${result.failed} failed`,
             );
           } catch (error) {
             new Notice(String(error));

@@ -2,11 +2,12 @@ import { MarkdownView, Notice, Plugin, TAbstractFile, TFile } from "obsidian";
 import {
   applyDateFrontmatter,
   DeferredModifiedWriteQueue,
-  normalizeTrailingNewline,
   shouldDeferModifiedWrite,
   shouldManagePath,
 } from "./frontmatter-date-utils";
 import type { DateFrontmatterOptions, FrontmatterDateSettings, PendingModifiedWrite } from "./frontmatter-date-utils";
+import { formatNoteContent } from "./note-format-utils";
+import type { NoteFormatSettings } from "./note-format-utils";
 
 export interface BackfillResult {
   processed: number;
@@ -21,14 +22,17 @@ export class FrontmatterDateManager {
   private unloaded = false;
   private plugin: Plugin;
   private settings: FrontmatterDateSettings;
+  private formatSettings: NoteFormatSettings;
 
-  constructor(plugin: Plugin, settings: FrontmatterDateSettings) {
+  constructor(plugin: Plugin, settings: FrontmatterDateSettings, formatSettings: NoteFormatSettings) {
     this.plugin = plugin;
     this.settings = settings;
+    this.formatSettings = formatSettings;
   }
 
-  updateSettings(settings: FrontmatterDateSettings) {
+  updateSettings(settings: FrontmatterDateSettings, formatSettings: NoteFormatSettings) {
     this.settings = settings;
+    this.formatSettings = formatSettings;
   }
 
   register() {
@@ -100,7 +104,7 @@ export class FrontmatterDateManager {
     return result;
   }
 
-  async normalizeAll(): Promise<BackfillResult> {
+  async formatAll(): Promise<BackfillResult> {
     const result: BackfillResult = { processed: 0, updated: 0, skipped: 0, failed: 0 };
     for (const file of this.plugin.app.vault.getMarkdownFiles()) {
       if (!shouldManagePath(file.path, this.settings)) {
@@ -110,11 +114,14 @@ export class FrontmatterDateManager {
       result.processed++;
       try {
         const content = await this.plugin.app.vault.cachedRead(file);
-        if (normalizeTrailingNewline(content) === null) {
+        if (formatNoteContent(content, this.formatSettings) === null) {
           result.skipped++;
           continue;
         }
-        await this.plugin.app.vault.process(file, (current) => normalizeTrailingNewline(current) ?? current);
+        await this.plugin.app.vault.process(
+          file,
+          (current) => formatNoteContent(current, this.formatSettings) ?? current,
+        );
         result.updated++;
       } catch {
         result.failed++;
@@ -206,15 +213,17 @@ export class FrontmatterDateManager {
       modifiedMs: write.modifiedMs,
       overwriteModified: true,
     });
-    await this.normalizeFileEnding(file);
+    await this.formatFile(file);
   }
 
-  private async normalizeFileEnding(file: TFile) {
-    if (!this.settings.normalizeTrailingNewline) return;
+  private async formatFile(file: TFile) {
     try {
       const content = await this.plugin.app.vault.cachedRead(file);
-      if (normalizeTrailingNewline(content) === null) return;
-      await this.plugin.app.vault.process(file, (current) => normalizeTrailingNewline(current) ?? current);
+      if (formatNoteContent(content, this.formatSettings) === null) return;
+      await this.plugin.app.vault.process(
+        file,
+        (current) => formatNoteContent(current, this.formatSettings) ?? current,
+      );
     } catch (error) {
       new Notice(String(error));
       throw error;
