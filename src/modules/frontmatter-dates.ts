@@ -113,7 +113,7 @@ export class FrontmatterDateManager {
       }
       result.processed++;
       try {
-        const content = await this.plugin.app.vault.cachedRead(file);
+        const content = await this.plugin.app.vault.read(file);
         if (formatNoteContent(content, this.formatSettings) === null) {
           result.skipped++;
           continue;
@@ -218,7 +218,7 @@ export class FrontmatterDateManager {
 
   private async formatFile(file: TFile) {
     try {
-      const content = await this.plugin.app.vault.cachedRead(file);
+      const content = await this.plugin.app.vault.read(file);
       if (formatNoteContent(content, this.formatSettings) === null) return;
       await this.plugin.app.vault.process(
         file,
