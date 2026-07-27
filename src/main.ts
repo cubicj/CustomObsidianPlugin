@@ -4,6 +4,7 @@ import { FontLoader, FontSettings, DEFAULT_FONT_SETTINGS } from "./modules/font-
 import { FrontmatterDateManager } from "./modules/frontmatter-dates";
 import { DEFAULT_FRONTMATTER_DATE_SETTINGS } from "./modules/frontmatter-date-utils";
 import type { FrontmatterDateSettings } from "./modules/frontmatter-date-utils";
+import { createHeadingEnterExtension } from "./modules/note-format-editor";
 import { DEFAULT_NOTE_FORMAT_SETTINGS } from "./modules/note-format-utils";
 import type { NoteFormatSettings } from "./modules/note-format-utils";
 import {
@@ -61,6 +62,7 @@ export default class CubicJCorePlugin extends Plugin {
     this.vaultReplace = new VaultReplaceManager(this, this.settings.vaultReplace);
     this.vaultReplace.register();
 
+    this.registerEditorExtension(createHeadingEnterExtension(() => this.settings.noteFormat));
     this.addSettingTab(new CubicJCoreSettingTab(this.app, this));
     console.log("CubicJ Core loaded");
   }
