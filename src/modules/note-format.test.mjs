@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isBlankLine, isHeadingLine, scanRegions } from "./note-format-utils.ts";
+import {
+  DEFAULT_NOTE_FORMAT_SETTINGS,
+  formatNoteContent,
+  isBlankLine,
+  isHeadingLine,
+  scanRegions,
+} from "./note-format-utils.ts";
 
 test("isHeadingLine accepts ATX headings with text", () => {
   assert.equal(isHeadingLine("# Title"), true);
@@ -78,4 +84,140 @@ test("scanRegions does not close a fence with trailing content on the delimiter"
 test("scanRegions tolerates CRLF frontmatter delimiters", () => {
   const lines = ["---\r", "a: 1\r", "---\r", "# Title\r"];
   assert.deepEqual(scanRegions(lines), ["frontmatter", "frontmatter", "frontmatter", "normal"]);
+});
+
+const ALL_ON = DEFAULT_NOTE_FORMAT_SETTINGS;
+const ONLY_HEADINGS = {
+  normalizeTrailingNewline: false,
+  blankLinesAroundHeadings: true,
+  collapseBlankLines: false,
+  headingEnterBlankLine: false,
+};
+const ONLY_COLLAPSE = {
+  normalizeTrailingNewline: false,
+  blankLinesAroundHeadings: false,
+  collapseBlankLines: true,
+  headingEnterBlankLine: false,
+};
+const ONLY_TRAILING = {
+  normalizeTrailingNewline: true,
+  blankLinesAroundHeadings: false,
+  collapseBlankLines: false,
+  headingEnterBlankLine: false,
+};
+const ALL_OFF = {
+  normalizeTrailingNewline: false,
+  blankLinesAroundHeadings: false,
+  collapseBlankLines: false,
+  headingEnterBlankLine: false,
+};
+
+test("defaults enable every rule", () => {
+  assert.deepEqual(DEFAULT_NOTE_FORMAT_SETTINGS, {
+    normalizeTrailingNewline: true,
+    blankLinesAroundHeadings: true,
+    collapseBlankLines: true,
+    headingEnterBlankLine: true,
+  });
+});
+
+test("formatNoteContent returns null for empty content", () => {
+  assert.equal(formatNoteContent("", ALL_ON), null);
+});
+
+test("formatNoteContent returns null when every rule is off", () => {
+  assert.equal(formatNoteContent("# A\ntext", ALL_OFF), null);
+});
+
+test("wraps a heading that has text above and below", () => {
+  assert.equal(formatNoteContent("intro\n# Title\nbody\n", ONLY_HEADINGS), "intro\n\n# Title\n\nbody\n");
+});
+
+test("does not add a blank line before a heading on the first body line", () => {
+  assert.equal(formatNoteContent("# Title\nbody\n", ONLY_HEADINGS), "# Title\n\nbody\n");
+});
+
+test("does not add a blank line before a heading right after frontmatter", () => {
+  const input = "---\na: 1\n---\n# Title\nbody\n";
+  assert.equal(formatNoteContent(input, ONLY_HEADINGS), "---\na: 1\n---\n# Title\n\nbody\n");
+});
+
+test("keeps an existing blank line after frontmatter", () => {
+  const input = "---\na: 1\n---\n\n# Title\n\nbody\n";
+  assert.equal(formatNoteContent(input, ONLY_HEADINGS), null);
+});
+
+test("does not double the blank line between adjacent headings", () => {
+  assert.equal(formatNoteContent("# A\n## B\n", ONLY_HEADINGS), "# A\n\n## B\n");
+});
+
+test("does not pad a heading that ends the document", () => {
+  assert.equal(formatNoteContent("body\n# Title\n", ONLY_HEADINGS), "body\n\n# Title\n");
+});
+
+test("does not pad a heading that ends the document without a final newline", () => {
+  assert.equal(formatNoteContent("body\n# Title", ONLY_HEADINGS), "body\n\n# Title");
+});
+
+test("leaves headings inside a fence alone", () => {
+  const input = "```md\n# Title\ntext\n```\n";
+  assert.equal(formatNoteContent(input, ONLY_HEADINGS), null);
+});
+
+test("leaves heading-shaped comments inside frontmatter alone", () => {
+  const input = "---\n# comment\na: 1\n---\nbody\n";
+  assert.equal(formatNoteContent(input, ONLY_HEADINGS), null);
+});
+
+test("leaves tags, indented and quoted heading lookalikes alone", () => {
+  const input = "#tag\n  # indented\n> # quoted\n";
+  assert.equal(formatNoteContent(input, ONLY_HEADINGS), null);
+});
+
+test("collapses a run of blank lines to one", () => {
+  assert.equal(formatNoteContent("a\n\n\n\nb\n", ONLY_COLLAPSE), "a\n\nb\n");
+});
+
+test("leaves a single blank line alone", () => {
+  assert.equal(formatNoteContent("a\n\nb\n", ONLY_COLLAPSE), null);
+});
+
+test("keeps the first line of a blank run verbatim", () => {
+  assert.equal(formatNoteContent("a\n   \n\nb\n", ONLY_COLLAPSE), "a\n   \nb\n");
+});
+
+test("does not collapse blank lines inside a fence", () => {
+  const input = "```\ncode\n\n\n\nmore\n```\n";
+  assert.equal(formatNoteContent(input, ONLY_COLLAPSE), null);
+});
+
+test("appends a missing final newline", () => {
+  assert.equal(formatNoteContent("text", ONLY_TRAILING), "text\n");
+});
+
+test("returns null when exactly one final newline is present", () => {
+  assert.equal(formatNoteContent("text\n", ONLY_TRAILING), null);
+});
+
+test("collapses multiple final newlines to one", () => {
+  assert.equal(formatNoteContent("text\n\n\n", ONLY_TRAILING), "text\n");
+});
+
+test("strips a whitespace-only trailing tail", () => {
+  assert.equal(formatNoteContent("text\n  \n", ONLY_TRAILING), "text\n");
+});
+
+test("preserves trailing whitespace on the last content line", () => {
+  assert.equal(formatNoteContent("- [ ] \n", ONLY_TRAILING), null);
+});
+
+test("applies every rule together in order", () => {
+  const input = "---\na: 1\n---\n# Title\nbody\n\n\n\n## Next\ntail\n\n\n";
+  const expected = "---\na: 1\n---\n# Title\n\nbody\n\n## Next\n\ntail\n";
+  assert.equal(formatNoteContent(input, ALL_ON), expected);
+});
+
+test("returns null for content that is already fully formatted", () => {
+  const input = "---\na: 1\n---\n# Title\n\nbody\n\n## Next\n\ntail\n";
+  assert.equal(formatNoteContent(input, ALL_ON), null);
 });

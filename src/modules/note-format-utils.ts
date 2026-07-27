@@ -46,3 +46,73 @@ export function scanRegions(lines: string[]): LineRegion[] {
   }
   return regions;
 }
+
+export interface NoteFormatSettings {
+  normalizeTrailingNewline: boolean;
+  blankLinesAroundHeadings: boolean;
+  collapseBlankLines: boolean;
+  headingEnterBlankLine: boolean;
+}
+
+export const DEFAULT_NOTE_FORMAT_SETTINGS: NoteFormatSettings = {
+  normalizeTrailingNewline: true,
+  blankLinesAroundHeadings: true,
+  collapseBlankLines: true,
+  headingEnterBlankLine: true,
+};
+
+export function formatNoteContent(content: string, settings: NoteFormatSettings): string | null {
+  if (content.length === 0) return null;
+  let lines = content.split("\n");
+  if (settings.collapseBlankLines) lines = collapseBlankRuns(lines);
+  if (settings.blankLinesAroundHeadings) lines = padHeadings(lines);
+  let next = lines.join("\n");
+  if (settings.normalizeTrailingNewline) {
+    next = `${next.replace(/(\n[ \t\r]*)+$/, "")}\n`;
+  }
+  return next === content ? null : next;
+}
+
+function collapseBlankRuns(lines: string[]): string[] {
+  const regions = scanRegions(lines);
+  const output: string[] = [];
+  let run = 0;
+  for (let index = 0; index < lines.length; index++) {
+    const collapsible = regions[index] === "normal" && isBlankLine(lines[index]);
+    if (!collapsible) {
+      run = 0;
+      output.push(lines[index]);
+      continue;
+    }
+    run++;
+    if (run === 1) output.push(lines[index]);
+  }
+  return output;
+}
+
+function padHeadings(lines: string[]): string[] {
+  const regions = scanRegions(lines);
+  const bodyStart = findBodyStart(regions);
+  const output: string[] = [];
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    if (regions[index] !== "normal" || !isHeadingLine(line)) {
+      output.push(line);
+      continue;
+    }
+    if (index > bodyStart && output.length > 0 && !isBlankLine(output[output.length - 1])) {
+      output.push("");
+    }
+    output.push(line);
+    if (index + 1 < lines.length && !isBlankLine(lines[index + 1])) {
+      output.push("");
+    }
+  }
+  return output;
+}
+
+function findBodyStart(regions: LineRegion[]): number {
+  let index = 0;
+  while (index < regions.length && regions[index] === "frontmatter") index++;
+  return index;
+}
