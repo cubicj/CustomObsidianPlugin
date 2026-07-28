@@ -1,7 +1,7 @@
 {
   "id": "cubicj-core",
   "name": "CubicJ Core",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "minAppVersion": "1.7.2",
   "description": "Core utilities: font loader, focus control, frontmatter date management, markdown formatting, vault-wide find and replace",
   "author": "CubicJ",
