@@ -161,6 +161,18 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName("목록 뒤 문단에 빈 줄 넣기")
+      .setDesc(
+        "목록 항목 바로 아래에 들여쓰기 없는 일반 문단이 오면 사이에 빈 줄을 하나 넣습니다. 들여쓴 줄은 목록의 연속 내용으로 보고 건드리지 않습니다.",
+      )
+      .addToggle((toggle) => {
+        toggle.setValue(settings.blankLineAfterList).onChange(async (value) => {
+          settings.blankLineAfterList = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
       .setName("헤딩에서 Enter 시 빈 줄 넣기")
       .setDesc("헤딩 줄 끝에서 Enter를 누르면 빈 줄을 하나 넣고 커서를 그 아래로 옮깁니다.")
       .addToggle((toggle) => {

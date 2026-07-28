@@ -2,6 +2,7 @@ export type LineRegion = "frontmatter" | "fence" | "normal";
 
 const HEADING_PATTERN = /^#{1,6}[ \t]+\S/;
 const BLANK_PATTERN = /^[ \t\r]*$/;
+const LIST_ITEM_PATTERN = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/;
 const FRONTMATTER_DELIMITER_PATTERN = /^---[ \t\r]*$/;
 const FENCE_PATTERN = /^[ \t]*(`{3,}|~{3,})(.*)$/;
 
@@ -51,6 +52,7 @@ export interface NoteFormatSettings {
   normalizeTrailingNewline: boolean;
   blankLinesAroundHeadings: boolean;
   collapseBlankLines: boolean;
+  blankLineAfterList: boolean;
   headingEnterBlankLine: boolean;
 }
 
@@ -58,6 +60,7 @@ export const DEFAULT_NOTE_FORMAT_SETTINGS: NoteFormatSettings = {
   normalizeTrailingNewline: true,
   blankLinesAroundHeadings: true,
   collapseBlankLines: true,
+  blankLineAfterList: true,
   headingEnterBlankLine: true,
 };
 
@@ -65,6 +68,7 @@ export function formatNoteContent(content: string, settings: NoteFormatSettings)
   if (content.length === 0) return null;
   let lines = content.split("\n");
   if (settings.collapseBlankLines) lines = collapseBlankRuns(lines);
+  if (settings.blankLineAfterList) lines = padTextAfterLists(lines);
   if (settings.blankLinesAroundHeadings) lines = padHeadings(lines);
   let next = lines.join("\n");
   if (settings.normalizeTrailingNewline) {
@@ -86,6 +90,31 @@ function collapseBlankRuns(lines: string[]): string[] {
     }
     run++;
     if (run === 1) output.push(lines[index]);
+  }
+  return output;
+}
+
+function padTextAfterLists(lines: string[]): string[] {
+  const regions = scanRegions(lines);
+  const output: string[] = [];
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    output.push(line);
+    if (index + 1 >= lines.length) continue;
+    const nextLine = lines[index + 1];
+    if (
+      regions[index] === "normal" &&
+      regions[index + 1] === "normal" &&
+      LIST_ITEM_PATTERN.test(line) &&
+      !isBlankLine(nextLine) &&
+      /^\S/.test(nextLine) &&
+      !LIST_ITEM_PATTERN.test(nextLine) &&
+      !isHeadingLine(nextLine) &&
+      !nextLine.startsWith(">") &&
+      !nextLine.startsWith("|")
+    ) {
+      output.push("");
+    }
   }
   return output;
 }

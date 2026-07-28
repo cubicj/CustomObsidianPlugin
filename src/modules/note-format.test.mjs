@@ -91,24 +91,35 @@ const ONLY_HEADINGS = {
   normalizeTrailingNewline: false,
   blankLinesAroundHeadings: true,
   collapseBlankLines: false,
+  blankLineAfterList: false,
   headingEnterBlankLine: false,
 };
 const ONLY_COLLAPSE = {
   normalizeTrailingNewline: false,
   blankLinesAroundHeadings: false,
   collapseBlankLines: true,
+  blankLineAfterList: false,
+  headingEnterBlankLine: false,
+};
+const ONLY_LIST = {
+  normalizeTrailingNewline: false,
+  blankLinesAroundHeadings: false,
+  collapseBlankLines: false,
+  blankLineAfterList: true,
   headingEnterBlankLine: false,
 };
 const ONLY_TRAILING = {
   normalizeTrailingNewline: true,
   blankLinesAroundHeadings: false,
   collapseBlankLines: false,
+  blankLineAfterList: false,
   headingEnterBlankLine: false,
 };
 const ALL_OFF = {
   normalizeTrailingNewline: false,
   blankLinesAroundHeadings: false,
   collapseBlankLines: false,
+  blankLineAfterList: false,
   headingEnterBlankLine: false,
 };
 
@@ -117,6 +128,7 @@ test("defaults enable every rule", () => {
     normalizeTrailingNewline: true,
     blankLinesAroundHeadings: true,
     collapseBlankLines: true,
+    blankLineAfterList: true,
     headingEnterBlankLine: true,
   });
 });
@@ -127,6 +139,57 @@ test("formatNoteContent returns null for empty content", () => {
 
 test("formatNoteContent returns null when every rule is off", () => {
   assert.equal(formatNoteContent("# A\ntext", ALL_OFF), null);
+});
+
+test("list padding works standalone for a bullet followed by flush-left bold text", () => {
+  assert.equal(formatNoteContent("- item\n**Label**\n", ONLY_LIST), "- item\n\n**Label**\n");
+});
+
+test("pads text after both ordered list marker styles", () => {
+  assert.equal(formatNoteContent("1. item\ntext\n", ONLY_LIST), "1. item\n\ntext\n");
+  assert.equal(formatNoteContent("1) item\ntext\n", ONLY_LIST), "1) item\n\ntext\n");
+});
+
+test("pads text after a task item", () => {
+  assert.equal(formatNoteContent("- [ ] foo\ntext\n", ONLY_LIST), "- [ ] foo\n\ntext\n");
+});
+
+test("pads text after list items indented with spaces or a tab", () => {
+  assert.equal(formatNoteContent("  - item\ntext\n", ONLY_LIST), "  - item\n\ntext\n");
+  assert.equal(formatNoteContent("\t- item\ntext\n", ONLY_LIST), "\t- item\n\ntext\n");
+});
+
+test("does not pad continuation content with leading whitespace", () => {
+  assert.equal(formatNoteContent("- item\n text\n", ONLY_LIST), null);
+  assert.equal(formatNoteContent("- item\n\ttext\n", ONLY_LIST), null);
+});
+
+test("does not pad structural lines after a list item", () => {
+  for (const next of ["- next", "1. next", "# Heading", "> quote", "| cell |", "```"]) {
+    assert.equal(formatNoteContent(`- item\n${next}\n`, ONLY_LIST), null);
+  }
+});
+
+test("does not pad list-shaped lines inside a fenced code block", () => {
+  const input = "```md\n- item\ntext\n```\n";
+  assert.equal(formatNoteContent(input, ONLY_LIST), null);
+});
+
+test("does not pad list-shaped lines inside frontmatter", () => {
+  const input = "---\n- item\ntext\n---\nbody\n";
+  assert.equal(formatNoteContent(input, ONLY_LIST), null);
+});
+
+test("keeps one existing blank after a list item and is idempotent", () => {
+  const expected = "- item\n\ntext\n";
+  assert.equal(formatNoteContent(expected, ONLY_LIST), null);
+  const formatted = formatNoteContent("- item\ntext\n", ONLY_LIST);
+  assert.equal(formatted, expected);
+  assert.equal(formatNoteContent(formatted, ONLY_LIST), null);
+});
+
+test("leaves list-adjacent text unchanged when list padding is off", () => {
+  assert.equal(formatNoteContent("- item\ntext\n", ALL_OFF), null);
 });
 
 test("wraps a heading that has text above and below", () => {
@@ -212,12 +275,12 @@ test("preserves trailing whitespace on the last content line", () => {
 });
 
 test("applies every rule together in order", () => {
-  const input = "---\na: 1\n---\n# Title\nbody\n\n\n\n## Next\ntail\n\n\n";
-  const expected = "---\na: 1\n---\n# Title\n\nbody\n\n## Next\n\ntail\n";
+  const input = "---\na: 1\n---\n# Title\n- item\nbody\n\n\n\n## Next\ntail\n\n\n";
+  const expected = "---\na: 1\n---\n# Title\n\n- item\n\nbody\n\n## Next\n\ntail\n";
   assert.equal(formatNoteContent(input, ALL_ON), expected);
 });
 
 test("returns null for content that is already fully formatted", () => {
-  const input = "---\na: 1\n---\n# Title\n\nbody\n\n## Next\n\ntail\n";
+  const input = "---\na: 1\n---\n# Title\n\n- item\n\nbody\n\n## Next\n\ntail\n";
   assert.equal(formatNoteContent(input, ALL_ON), null);
 });
