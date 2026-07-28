@@ -17,6 +17,11 @@ import {
   VaultReplaceManager,
 } from "./modules/vault-replace";
 import type { VaultReplaceSettings } from "./modules/vault-replace";
+import {
+  DEFAULT_STICKY_VIEW_MODE_SETTINGS,
+  StickyViewModeManager,
+} from "./modules/sticky-view-mode";
+import type { StickyViewModeSettings } from "./modules/sticky-view-mode";
 import { CubicJCoreSettingTab } from "./settings-tab";
 
 interface CubicJCoreSettings {
@@ -25,6 +30,7 @@ interface CubicJCoreSettings {
   noteFormat: NoteFormatSettings;
   foldProperties: FoldPropertiesSettings;
   vaultReplace: VaultReplaceSettings;
+  stickyViewMode: StickyViewModeSettings;
 }
 
 const DEFAULT_SETTINGS: CubicJCoreSettings = {
@@ -33,6 +39,7 @@ const DEFAULT_SETTINGS: CubicJCoreSettings = {
   noteFormat: DEFAULT_NOTE_FORMAT_SETTINGS,
   foldProperties: DEFAULT_FOLD_PROPERTIES_SETTINGS,
   vaultReplace: DEFAULT_VAULT_REPLACE_SETTINGS,
+  stickyViewMode: DEFAULT_STICKY_VIEW_MODE_SETTINGS,
 };
 
 export default class CubicJCorePlugin extends Plugin {
@@ -41,6 +48,7 @@ export default class CubicJCorePlugin extends Plugin {
   frontmatterDates!: FrontmatterDateManager;
   foldProperties!: FoldPropertiesManager;
   vaultReplace!: VaultReplaceManager;
+  stickyViewMode!: StickyViewModeManager;
 
   async onload() {
     await this.loadSettings();
@@ -61,6 +69,9 @@ export default class CubicJCorePlugin extends Plugin {
 
     this.vaultReplace = new VaultReplaceManager(this, this.settings.vaultReplace);
     this.vaultReplace.register();
+
+    this.stickyViewMode = new StickyViewModeManager(this, this.settings.stickyViewMode);
+    this.stickyViewMode.register();
 
     this.registerEditorExtension(createHeadingEnterExtension(() => this.settings.noteFormat));
     this.addSettingTab(new CubicJCoreSettingTab(this.app, this));
@@ -108,6 +119,11 @@ export default class CubicJCorePlugin extends Plugin {
       DEFAULT_VAULT_REPLACE_SETTINGS,
       this.settings.vaultReplace,
     );
+    this.settings.stickyViewMode = Object.assign(
+      {},
+      DEFAULT_STICKY_VIEW_MODE_SETTINGS,
+      this.settings.stickyViewMode,
+    );
   }
 
   async saveSettings() {
@@ -115,5 +131,6 @@ export default class CubicJCorePlugin extends Plugin {
     this.frontmatterDates?.updateSettings(this.settings.frontmatterDates, this.settings.noteFormat);
     this.foldProperties?.updateSettings(this.settings.foldProperties);
     this.vaultReplace?.updateSettings(this.settings.vaultReplace);
+    this.stickyViewMode?.updateSettings(this.settings.stickyViewMode);
   }
 }

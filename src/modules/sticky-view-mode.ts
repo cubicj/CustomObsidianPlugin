@@ -1,0 +1,64 @@
+import { Plugin, WorkspaceLeaf } from "obsidian";
+import { decideStickyViewMode } from "./sticky-view-mode-utils";
+import type { StickySnapshot } from "./sticky-view-mode-utils";
+
+export interface StickyViewModeSettings {
+  enabled: boolean;
+}
+
+export const DEFAULT_STICKY_VIEW_MODE_SETTINGS: StickyViewModeSettings = {
+  enabled: true,
+};
+
+type SetViewState = (this: WorkspaceLeaf, viewState: unknown, eState?: unknown) => Promise<void>;
+
+interface LeafPrototypeLike {
+  setViewState?: SetViewState;
+}
+
+export class StickyViewModeManager {
+  private plugin: Plugin;
+  private settings: StickyViewModeSettings;
+  private snapshots = new WeakMap<WorkspaceLeaf, StickySnapshot>();
+  private originalSetViewState: SetViewState | null = null;
+
+  constructor(plugin: Plugin, settings: StickyViewModeSettings) {
+    this.plugin = plugin;
+    this.settings = settings;
+  }
+
+  register(): void {
+    const proto = WorkspaceLeaf.prototype as unknown as LeafPrototypeLike;
+    if (typeof proto.setViewState !== "function") {
+      return;
+    }
+    const original = proto.setViewState;
+    this.originalSetViewState = original;
+    const manager = this;
+    proto.setViewState = function (viewState: unknown, eState?: unknown) {
+      const decision = decideStickyViewMode(
+        viewState,
+        manager.snapshots.get(this) ?? null,
+        manager.settings.enabled,
+      );
+      if (decision.action === "record") {
+        manager.snapshots.set(this, decision.snapshot);
+      } else if (decision.action === "coerce") {
+        const state = (viewState as { state: Record<string, unknown> }).state;
+        state.mode = decision.snapshot.mode;
+        state.source = decision.snapshot.source;
+      }
+      return original.call(this, viewState, eState);
+    };
+    this.plugin.register(() => {
+      if (this.originalSetViewState) {
+        proto.setViewState = this.originalSetViewState;
+        this.originalSetViewState = null;
+      }
+    });
+  }
+
+  updateSettings(settings: StickyViewModeSettings): void {
+    this.settings = settings;
+  }
+}

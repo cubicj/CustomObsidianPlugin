@@ -18,6 +18,7 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
     this.displayNoteFormatSection(containerEl);
     this.displayFoldPropertiesSection(containerEl);
     this.displayVaultReplaceSection(containerEl);
+    this.displayStickyViewModeSection(containerEl);
   }
 
   private async displayFontSection(containerEl: HTMLElement) {
@@ -225,6 +226,22 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.vaultReplace.enabled).onChange(async (value) => {
           this.plugin.settings.vaultReplace.enabled = value;
+          await this.plugin.saveSettings();
+        });
+      });
+  }
+
+  private displayStickyViewModeSection(containerEl: HTMLElement) {
+    new Setting(containerEl).setName("보기 모드 유지").setHeading();
+
+    new Setting(containerEl)
+      .setName("탭 보기 모드 유지")
+      .setDesc(
+        "읽기/편집 모드를 바꾸면 그 탭에서는 뒤로 가기, 앞으로 가기 후에도 바꾼 모드가 유지됩니다.",
+      )
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.stickyViewMode.enabled).onChange(async (value) => {
+          this.plugin.settings.stickyViewMode.enabled = value;
           await this.plugin.saveSettings();
         });
       });
