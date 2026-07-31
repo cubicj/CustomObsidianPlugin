@@ -8,6 +8,11 @@ import { createHeadingEnterExtension } from "./modules/note-format-editor";
 import { DEFAULT_NOTE_FORMAT_SETTINGS } from "./modules/note-format-utils";
 import type { NoteFormatSettings } from "./modules/note-format-utils";
 import {
+  createEagerParseExtension,
+  DEFAULT_EAGER_PARSE_SETTINGS,
+} from "./modules/eager-parse";
+import type { EagerParseSettings } from "./modules/eager-parse";
+import {
   DEFAULT_FOLD_PROPERTIES_SETTINGS,
   FoldPropertiesManager,
 } from "./modules/fold-properties";
@@ -33,6 +38,7 @@ interface CubicJCoreSettings {
   font: FontSettings;
   frontmatterDates: FrontmatterDateSettings;
   noteFormat: NoteFormatSettings;
+  eagerParse: EagerParseSettings;
   foldProperties: FoldPropertiesSettings;
   vaultReplace: VaultReplaceSettings;
   stickyViewMode: StickyViewModeSettings;
@@ -43,6 +49,7 @@ const DEFAULT_SETTINGS: CubicJCoreSettings = {
   font: DEFAULT_FONT_SETTINGS,
   frontmatterDates: DEFAULT_FRONTMATTER_DATE_SETTINGS,
   noteFormat: DEFAULT_NOTE_FORMAT_SETTINGS,
+  eagerParse: DEFAULT_EAGER_PARSE_SETTINGS,
   foldProperties: DEFAULT_FOLD_PROPERTIES_SETTINGS,
   vaultReplace: DEFAULT_VAULT_REPLACE_SETTINGS,
   stickyViewMode: DEFAULT_STICKY_VIEW_MODE_SETTINGS,
@@ -87,6 +94,7 @@ export default class CubicJCorePlugin extends Plugin {
     this.readingFolds.register();
 
     this.registerEditorExtension(createHeadingEnterExtension(() => this.settings.noteFormat));
+    this.registerEditorExtension(createEagerParseExtension(() => this.settings.eagerParse));
     this.addSettingTab(new CubicJCoreSettingTab(this.app, this));
     console.log("CubicJ Core loaded");
   }
@@ -111,6 +119,11 @@ export default class CubicJCorePlugin extends Plugin {
       {},
       DEFAULT_NOTE_FORMAT_SETTINGS,
       this.settings.noteFormat,
+    );
+    this.settings.eagerParse = Object.assign(
+      {},
+      DEFAULT_EAGER_PARSE_SETTINGS,
+      this.settings.eagerParse,
     );
     const legacyDates = data?.frontmatterDates as { normalizeTrailingNewline?: unknown } | undefined;
     if (data?.noteFormat === undefined && typeof legacyDates?.normalizeTrailingNewline === "boolean") {

@@ -20,6 +20,7 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
     this.displayVaultReplaceSection(containerEl);
     this.displayStickyViewModeSection(containerEl);
     this.displayReadingFoldsSection(containerEl);
+    this.displayEagerParseSection(containerEl);
   }
 
   private async displayFontSection(containerEl: HTMLElement) {
@@ -259,6 +260,22 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.readingFolds.enabled).onChange(async (value) => {
           this.plugin.settings.readingFolds.enabled = value;
+          await this.plugin.saveSettings();
+        });
+      });
+  }
+
+  private displayEagerParseSection(containerEl: HTMLElement) {
+    new Setting(containerEl).setName("편집 모드 스타일").setHeading();
+
+    new Setting(containerEl)
+      .setName("화면 영역 즉시 파싱")
+      .setDesc(
+        "편집 모드로 전환하거나 긴 문서를 빠르게 스크롤할 때 화면에 보이는 부분의 마크다운 스타일을 즉시 적용해 원문이 그대로 보이는 시간을 줄입니다.",
+      )
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.eagerParse.enabled).onChange(async (value) => {
+          this.plugin.settings.eagerParse.enabled = value;
           await this.plugin.saveSettings();
         });
       });
