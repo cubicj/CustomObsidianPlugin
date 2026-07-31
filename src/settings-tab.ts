@@ -19,6 +19,7 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
     this.displayFoldPropertiesSection(containerEl);
     this.displayVaultReplaceSection(containerEl);
     this.displayStickyViewModeSection(containerEl);
+    this.displayReadingFoldsSection(containerEl);
   }
 
   private async displayFontSection(containerEl: HTMLElement) {
@@ -242,6 +243,22 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.stickyViewMode.enabled).onChange(async (value) => {
           this.plugin.settings.stickyViewMode.enabled = value;
+          await this.plugin.saveSettings();
+        });
+      });
+  }
+
+  private displayReadingFoldsSection(containerEl: HTMLElement) {
+    new Setting(containerEl).setName("읽기 모드 접기").setHeading();
+
+    new Setting(containerEl)
+      .setName("접힌 상태로 바로 그리기")
+      .setDesc(
+        "노트를 열거나 읽기 모드로 전환할 때 저장된 헤딩 접기 상태를 첫 프레임부터 적용해 펼쳐졌다 접히는 깜빡임을 없앱니다.",
+      )
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.readingFolds.enabled).onChange(async (value) => {
+          this.plugin.settings.readingFolds.enabled = value;
           await this.plugin.saveSettings();
         });
       });

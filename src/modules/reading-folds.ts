@@ -1,0 +1,241 @@
+import { MarkdownPreviewView, Plugin, TFile } from "obsidian";
+import {
+  collectHeadingFoldLines,
+  countLines,
+  isHeadingSectionHtml,
+} from "./reading-folds-utils";
+
+export interface ReadingFoldsSettings {
+  enabled: boolean;
+}
+
+export const DEFAULT_READING_FOLDS_SETTINGS: ReadingFoldsSettings = {
+  enabled: true,
+};
+
+type PreviewSet = (
+  this: MarkdownPreviewView,
+  data: unknown,
+  clear: unknown,
+) => void;
+
+type ParseFinish = (this: RendererLike, ...args: unknown[]) => unknown;
+
+interface MarkdownPreviewPrototypeLike {
+  set?: PreviewSet;
+}
+
+interface MarkdownViewLike {
+  previewMode?: unknown;
+  file?: unknown;
+}
+
+interface MarkdownPreviewViewLike {
+  view?: MarkdownViewLike;
+  renderer?: unknown;
+}
+
+interface RendererLike {
+  text?: unknown;
+  lastText?: unknown;
+  sections?: unknown;
+  parseFinish?: ParseFinish;
+}
+
+interface SectionLike {
+  html?: unknown;
+  start?: unknown;
+  headingCollapsed?: boolean;
+  setCollapsed?: (collapsed: boolean) => unknown;
+}
+
+interface SectionStartLike {
+  line?: unknown;
+}
+
+interface VaultLike {
+  getConfig?: (key: string) => unknown;
+}
+
+interface FoldManagerLike {
+  load?: (file: TFile) => unknown;
+}
+
+interface AppLike {
+  vault?: VaultLike;
+  foldManager?: FoldManagerLike;
+}
+
+interface PendingParseFinish {
+  originalParseFinish: ParseFinish;
+  expectedText: string;
+  planLines: Set<number>;
+}
+
+export class ReadingFoldsManager {
+  private plugin: Plugin;
+  private settings: ReadingFoldsSettings;
+  private originalSet: PreviewSet | null = null;
+  private pending = new Map<RendererLike, PendingParseFinish>();
+
+  constructor(plugin: Plugin, settings: ReadingFoldsSettings) {
+    this.plugin = plugin;
+    this.settings = settings;
+  }
+
+  register(): void {
+    const proto = MarkdownPreviewView.prototype as unknown as MarkdownPreviewPrototypeLike;
+    if (typeof proto.set !== "function") {
+      return;
+    }
+    const original = proto.set;
+    this.originalSet = original;
+    const manager = this;
+    proto.set = function (data: unknown, clear: unknown) {
+      original.call(this, data, clear);
+      let renderer: RendererLike | null = null;
+      try {
+        const preview = this as unknown as MarkdownPreviewViewLike;
+        if (typeof preview.renderer !== "object" || preview.renderer === null) {
+          return;
+        }
+        renderer = preview.renderer as RendererLike;
+        manager.preload(this, preview, renderer, data);
+      } catch {
+        if (renderer) {
+          manager.clearPending(renderer);
+        }
+      }
+    };
+    this.plugin.register(() => {
+      if (this.originalSet) {
+        proto.set = this.originalSet;
+        this.originalSet = null;
+      }
+      for (const renderer of [...this.pending.keys()]) {
+        this.clearPending(renderer);
+      }
+    });
+  }
+
+  updateSettings(settings: ReadingFoldsSettings): void {
+    this.settings = settings;
+  }
+
+  private preload(
+    previewView: MarkdownPreviewView,
+    preview: MarkdownPreviewViewLike,
+    renderer: RendererLike,
+    data: unknown,
+  ): void {
+    if (!this.settings.enabled || typeof data !== "string") {
+      this.clearPending(renderer);
+      return;
+    }
+    const view = preview.view;
+    if (!view || view.previewMode !== previewView || !(view.file instanceof TFile)) {
+      this.clearPending(renderer);
+      return;
+    }
+    const app = this.plugin.app as unknown as AppLike;
+    const vault = app.vault;
+    if (
+      !vault ||
+      typeof vault.getConfig !== "function" ||
+      !vault.getConfig("foldHeading")
+    ) {
+      this.clearPending(renderer);
+      return;
+    }
+    const foldManager = app.foldManager;
+    if (!foldManager || typeof foldManager.load !== "function") {
+      this.clearPending(renderer);
+      return;
+    }
+    const planLines = collectHeadingFoldLines(
+      foldManager.load.call(foldManager, view.file),
+      countLines(data),
+    );
+    if (planLines === null) {
+      this.clearPending(renderer);
+      return;
+    }
+    if (renderer.lastText === renderer.text) {
+      this.clearPending(renderer);
+      this.applyPlan(renderer, planLines);
+      return;
+    }
+    const pending = this.pending.get(renderer);
+    if (pending) {
+      pending.expectedText = data;
+      pending.planLines = planLines;
+      return;
+    }
+    if (typeof renderer.parseFinish !== "function") {
+      this.clearPending(renderer);
+      return;
+    }
+    const originalParseFinish = renderer.parseFinish;
+    this.pending.set(renderer, {
+      originalParseFinish,
+      expectedText: data,
+      planLines,
+    });
+    const manager = this;
+    renderer.parseFinish = function (...args: unknown[]) {
+      try {
+        const result = originalParseFinish.apply(this, args);
+        try {
+          const current = manager.pending.get(renderer);
+          if (current && renderer.text === current.expectedText) {
+            manager.applyPlan(renderer, current.planLines);
+          }
+        } catch {
+        }
+        return result;
+      } finally {
+        manager.clearPending(renderer);
+      }
+    };
+  }
+
+  private applyPlan(renderer: RendererLike, planLines: Set<number>): void {
+    if (!Array.isArray(renderer.sections)) {
+      return;
+    }
+    for (const value of renderer.sections) {
+      if (typeof value !== "object" || value === null) {
+        continue;
+      }
+      const section = value as SectionLike;
+      if (!isHeadingSectionHtml(section.html)) {
+        continue;
+      }
+      if (typeof section.start !== "object" || section.start === null) {
+        continue;
+      }
+      const line = (section.start as SectionStartLike).line;
+      if (typeof line !== "number" || !Number.isFinite(line)) {
+        continue;
+      }
+      const collapsed = planLines.has(line);
+      if (typeof section.setCollapsed === "function") {
+        section.setCollapsed(collapsed);
+      } else {
+        section.headingCollapsed = collapsed;
+      }
+    }
+  }
+
+  private clearPending(renderer: RendererLike): void {
+    const pending = this.pending.get(renderer);
+    if (!pending) {
+      return;
+    }
+    this.pending.delete(renderer);
+    try {
+      renderer.parseFinish = pending.originalParseFinish;
+    } catch {
+    }
+  }
+}

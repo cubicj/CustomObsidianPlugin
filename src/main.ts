@@ -22,6 +22,11 @@ import {
   StickyViewModeManager,
 } from "./modules/sticky-view-mode";
 import type { StickyViewModeSettings } from "./modules/sticky-view-mode";
+import {
+  DEFAULT_READING_FOLDS_SETTINGS,
+  ReadingFoldsManager,
+} from "./modules/reading-folds";
+import type { ReadingFoldsSettings } from "./modules/reading-folds";
 import { CubicJCoreSettingTab } from "./settings-tab";
 
 interface CubicJCoreSettings {
@@ -31,6 +36,7 @@ interface CubicJCoreSettings {
   foldProperties: FoldPropertiesSettings;
   vaultReplace: VaultReplaceSettings;
   stickyViewMode: StickyViewModeSettings;
+  readingFolds: ReadingFoldsSettings;
 }
 
 const DEFAULT_SETTINGS: CubicJCoreSettings = {
@@ -40,6 +46,7 @@ const DEFAULT_SETTINGS: CubicJCoreSettings = {
   foldProperties: DEFAULT_FOLD_PROPERTIES_SETTINGS,
   vaultReplace: DEFAULT_VAULT_REPLACE_SETTINGS,
   stickyViewMode: DEFAULT_STICKY_VIEW_MODE_SETTINGS,
+  readingFolds: DEFAULT_READING_FOLDS_SETTINGS,
 };
 
 export default class CubicJCorePlugin extends Plugin {
@@ -49,6 +56,7 @@ export default class CubicJCorePlugin extends Plugin {
   foldProperties!: FoldPropertiesManager;
   vaultReplace!: VaultReplaceManager;
   stickyViewMode!: StickyViewModeManager;
+  readingFolds!: ReadingFoldsManager;
 
   async onload() {
     await this.loadSettings();
@@ -74,6 +82,9 @@ export default class CubicJCorePlugin extends Plugin {
 
     this.stickyViewMode = new StickyViewModeManager(this, this.settings.stickyViewMode);
     this.stickyViewMode.register();
+
+    this.readingFolds = new ReadingFoldsManager(this, this.settings.readingFolds);
+    this.readingFolds.register();
 
     this.registerEditorExtension(createHeadingEnterExtension(() => this.settings.noteFormat));
     this.addSettingTab(new CubicJCoreSettingTab(this.app, this));
@@ -122,6 +133,11 @@ export default class CubicJCorePlugin extends Plugin {
       DEFAULT_STICKY_VIEW_MODE_SETTINGS,
       this.settings.stickyViewMode,
     );
+    this.settings.readingFolds = Object.assign(
+      {},
+      DEFAULT_READING_FOLDS_SETTINGS,
+      this.settings.readingFolds,
+    );
   }
 
   async saveSettings() {
@@ -130,5 +146,6 @@ export default class CubicJCorePlugin extends Plugin {
     this.foldProperties?.updateSettings(this.settings.foldProperties);
     this.vaultReplace?.updateSettings(this.settings.vaultReplace);
     this.stickyViewMode?.updateSettings(this.settings.stickyViewMode);
+    this.readingFolds?.updateSettings(this.settings.readingFolds);
   }
 }
