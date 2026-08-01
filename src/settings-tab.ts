@@ -14,13 +14,7 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     await this.displayFontSection(containerEl);
-    this.displayFrontmatterDatesSection(containerEl);
-    this.displayNoteFormatSection(containerEl);
-    this.displayFoldPropertiesSection(containerEl);
-    this.displayVaultReplaceSection(containerEl);
-    this.displayStickyViewModeSection(containerEl);
-    this.displayReadingFoldsSection(containerEl);
-    this.displayEagerParseSection(containerEl);
+    this.displayNoteMaintenanceSection(containerEl);
   }
 
   private async displayFontSection(containerEl: HTMLElement) {
@@ -71,20 +65,10 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
       });
   }
 
-  private displayFrontmatterDatesSection(containerEl: HTMLElement) {
-    new Setting(containerEl).setName("프론트매터 날짜").setHeading();
+  private displayNoteMaintenanceSection(containerEl: HTMLElement) {
+    new Setting(containerEl).setName("노트 관리").setHeading();
 
     const settings = this.plugin.settings.frontmatterDates;
-
-    new Setting(containerEl)
-      .setName("노트 날짜 관리")
-      .setDesc("개인 노트의 created, modified 프론트매터 필드를 자동으로 갱신합니다.")
-      .addToggle((toggle) => {
-        toggle.setValue(settings.enabled).onChange(async (value) => {
-          settings.enabled = value;
-          await this.plugin.saveSettings();
-        });
-      });
 
     new Setting(containerEl)
       .setName("관리 폴더")
@@ -109,174 +93,24 @@ export class CubicJCoreSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("노트 날짜 채우기")
-      .setDesc("created, modified 필드가 비어 있는 노트만 채우고 기존 값은 건드리지 않습니다.")
+      .setName("노트 종합 정리")
+      .setDesc(
+        "관리 대상 노트 전체에 비어 있는 created, modified 날짜를 채운 뒤 정리 규칙을 적용합니다. 정리 규칙은 modified 날짜를 갱신하지 않습니다.",
+      )
       .addButton((button) => {
-        button.setButtonText("채우기").onClick(async () => {
+        button.setButtonText("정리 실행").onClick(async () => {
           button.setDisabled(true);
           try {
-            const result = await this.plugin.frontmatterDates.backfillAll();
+            const dates = await this.plugin.frontmatterDates.backfillAll();
+            const format = await this.plugin.frontmatterDates.formatAll();
             new Notice(
-              `날짜 채우기 완료: 대상 ${result.processed}개, 변경 ${result.updated}개, 건너뜀 ${result.skipped}개, 실패 ${result.failed}개`,
+              `노트 종합 정리 완료: 날짜 채움 ${dates.updated}개, 서식 변경 ${format.updated}개, 실패 ${dates.failed + format.failed}개`,
             );
           } catch (error) {
             new Notice(String(error));
           } finally {
             button.setDisabled(false);
           }
-        });
-      });
-  }
-
-  private displayNoteFormatSection(containerEl: HTMLElement) {
-    new Setting(containerEl).setName("마크다운 정리").setHeading();
-
-    const settings = this.plugin.settings.noteFormat;
-
-    new Setting(containerEl)
-      .setName("문서 끝 빈 줄 정리")
-      .setDesc("로컬에서 편집한 노트가 마지막에 빈 줄 하나로 끝나도록 맞춥니다.")
-      .addToggle((toggle) => {
-        toggle.setValue(settings.normalizeTrailingNewline).onChange(async (value) => {
-          settings.normalizeTrailingNewline = value;
-          await this.plugin.saveSettings();
-        });
-      });
-
-    new Setting(containerEl)
-      .setName("헤딩을 빈 줄로 감싸기")
-      .setDesc("헤딩 앞뒤에 빈 줄을 하나씩 둡니다. 코드 블록과 프론트매터는 건드리지 않습니다.")
-      .addToggle((toggle) => {
-        toggle.setValue(settings.blankLinesAroundHeadings).onChange(async (value) => {
-          settings.blankLinesAroundHeadings = value;
-          await this.plugin.saveSettings();
-        });
-      });
-
-    new Setting(containerEl)
-      .setName("연속 빈 줄 합치기")
-      .setDesc("빈 줄이 두 줄 이상 이어지면 한 줄로 줄입니다. 코드 블록은 건드리지 않습니다.")
-      .addToggle((toggle) => {
-        toggle.setValue(settings.collapseBlankLines).onChange(async (value) => {
-          settings.collapseBlankLines = value;
-          await this.plugin.saveSettings();
-        });
-      });
-
-    new Setting(containerEl)
-      .setName("목록 뒤 문단에 빈 줄 넣기")
-      .setDesc(
-        "목록 항목 바로 아래에 들여쓰기 없는 일반 문단이 오면 사이에 빈 줄을 하나 넣습니다. 들여쓴 줄은 목록의 연속 내용으로 보고 건드리지 않습니다.",
-      )
-      .addToggle((toggle) => {
-        toggle.setValue(settings.blankLineAfterList).onChange(async (value) => {
-          settings.blankLineAfterList = value;
-          await this.plugin.saveSettings();
-        });
-      });
-
-    new Setting(containerEl)
-      .setName("헤딩에서 Enter 시 빈 줄 넣기")
-      .setDesc("헤딩 줄 끝에서 Enter를 누르면 빈 줄을 하나 넣고 커서를 그 아래로 옮깁니다.")
-      .addToggle((toggle) => {
-        toggle.setValue(settings.headingEnterBlankLine).onChange(async (value) => {
-          settings.headingEnterBlankLine = value;
-          await this.plugin.saveSettings();
-        });
-      });
-
-    new Setting(containerEl)
-      .setName("노트 정리 실행")
-      .setDesc("켜져 있는 정리 규칙을 관리 대상 노트 전체에 적용합니다. modified 날짜는 갱신하지 않습니다.")
-      .addButton((button) => {
-        button.setButtonText("정리").onClick(async () => {
-          button.setDisabled(true);
-          try {
-            const result = await this.plugin.frontmatterDates.formatAll();
-            new Notice(
-              `노트 정리 완료: 대상 ${result.processed}개, 변경 ${result.updated}개, 건너뜀 ${result.skipped}개, 실패 ${result.failed}개`,
-            );
-          } catch (error) {
-            new Notice(String(error));
-          } finally {
-            button.setDisabled(false);
-          }
-        });
-      });
-  }
-
-  private displayFoldPropertiesSection(containerEl: HTMLElement) {
-    new Setting(containerEl).setName("속성 접기").setHeading();
-
-    new Setting(containerEl)
-      .setName("속성 기본 접기")
-      .setDesc("노트를 열 때 속성 블록을 접은 상태로 표시합니다. 직접 펼치면 노트가 열려 있는 동안 유지됩니다.")
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.foldProperties.enabled).onChange(async (value) => {
-          this.plugin.settings.foldProperties.enabled = value;
-          await this.plugin.saveSettings();
-        });
-      });
-  }
-
-  private displayVaultReplaceSection(containerEl: HTMLElement) {
-    new Setting(containerEl).setName("전체 파일 찾아 바꾸기").setHeading();
-
-    new Setting(containerEl)
-      .setName("찾아 바꾸기 명령 사용")
-      .setDesc("전체 파일 찾아 바꾸기 명령과 Mod+Shift+H 단축키를 등록합니다.")
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.vaultReplace.enabled).onChange(async (value) => {
-          this.plugin.settings.vaultReplace.enabled = value;
-          await this.plugin.saveSettings();
-        });
-      });
-  }
-
-  private displayStickyViewModeSection(containerEl: HTMLElement) {
-    new Setting(containerEl).setName("보기 모드 유지").setHeading();
-
-    new Setting(containerEl)
-      .setName("탭 보기 모드 유지")
-      .setDesc(
-        "읽기/편집 모드를 바꾸면 그 탭에서는 뒤로 가기, 앞으로 가기 후에도 바꾼 모드가 유지됩니다.",
-      )
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.stickyViewMode.enabled).onChange(async (value) => {
-          this.plugin.settings.stickyViewMode.enabled = value;
-          await this.plugin.saveSettings();
-        });
-      });
-  }
-
-  private displayReadingFoldsSection(containerEl: HTMLElement) {
-    new Setting(containerEl).setName("읽기 모드 접기").setHeading();
-
-    new Setting(containerEl)
-      .setName("접힌 상태로 바로 그리기")
-      .setDesc(
-        "노트를 열거나 읽기 모드로 전환할 때 저장된 헤딩 접기 상태를 첫 프레임부터 적용해 펼쳐졌다 접히는 깜빡임을 없앱니다.",
-      )
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.readingFolds.enabled).onChange(async (value) => {
-          this.plugin.settings.readingFolds.enabled = value;
-          await this.plugin.saveSettings();
-        });
-      });
-  }
-
-  private displayEagerParseSection(containerEl: HTMLElement) {
-    new Setting(containerEl).setName("편집 모드 스타일").setHeading();
-
-    new Setting(containerEl)
-      .setName("화면 영역 즉시 파싱")
-      .setDesc(
-        "편집 모드로 전환하거나 긴 문서를 빠르게 스크롤할 때 화면에 보이는 부분의 마크다운 스타일을 즉시 적용해 원문이 그대로 보이는 시간을 줄입니다.",
-      )
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.eagerParse.enabled).onChange(async (value) => {
-          this.plugin.settings.eagerParse.enabled = value;
-          await this.plugin.saveSettings();
         });
       });
   }
