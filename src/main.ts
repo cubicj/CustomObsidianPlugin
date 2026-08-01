@@ -76,21 +76,21 @@ export default class CubicJCorePlugin extends Plugin {
 
     this.frontmatterDates = new FrontmatterDateManager(
       this,
-      this.settings.frontmatterDates,
-      this.settings.noteFormat,
+      () => this.settings.frontmatterDates,
+      () => this.settings.noteFormat,
     );
     this.frontmatterDates.register();
 
-    this.foldProperties = new FoldPropertiesManager(this, this.settings.foldProperties);
+    this.foldProperties = new FoldPropertiesManager(this, () => this.settings.foldProperties);
     this.foldProperties.register();
 
-    this.vaultReplace = new VaultReplaceManager(this, this.settings.vaultReplace);
+    this.vaultReplace = new VaultReplaceManager(this, () => this.settings.vaultReplace);
     this.vaultReplace.register();
 
-    this.stickyViewMode = new StickyViewModeManager(this, this.settings.stickyViewMode);
+    this.stickyViewMode = new StickyViewModeManager(this, () => this.settings.stickyViewMode);
     this.stickyViewMode.register();
 
-    this.readingFolds = new ReadingFoldsManager(this, this.settings.readingFolds);
+    this.readingFolds = new ReadingFoldsManager(this, () => this.settings.readingFolds);
     this.readingFolds.register();
 
     this.registerEditorExtension(createHeadingEnterExtension(() => this.settings.noteFormat));
@@ -109,56 +109,19 @@ export default class CubicJCorePlugin extends Plugin {
   async loadSettings() {
     const data = (await this.loadData()) as Record<string, unknown> | null;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
-    this.settings.font = Object.assign({}, DEFAULT_FONT_SETTINGS, this.settings.font);
-    this.settings.frontmatterDates = Object.assign(
-      {},
-      DEFAULT_FRONTMATTER_DATE_SETTINGS,
-      this.settings.frontmatterDates,
-    );
-    this.settings.noteFormat = Object.assign(
-      {},
-      DEFAULT_NOTE_FORMAT_SETTINGS,
-      this.settings.noteFormat,
-    );
-    this.settings.eagerParse = Object.assign(
-      {},
-      DEFAULT_EAGER_PARSE_SETTINGS,
-      this.settings.eagerParse,
-    );
+    const settings = this.settings as unknown as Record<string, Record<string, unknown>>;
+    for (const [key, defaults] of Object.entries(DEFAULT_SETTINGS)) {
+      settings[key] = Object.assign({}, defaults, settings[key]);
+    }
     const legacyDates = data?.frontmatterDates as { normalizeTrailingNewline?: unknown } | undefined;
     if (data?.noteFormat === undefined && typeof legacyDates?.normalizeTrailingNewline === "boolean") {
       this.settings.noteFormat.normalizeTrailingNewline = legacyDates.normalizeTrailingNewline;
     }
     delete (this.settings.frontmatterDates as { normalizeTrailingNewline?: boolean })
       .normalizeTrailingNewline;
-    this.settings.foldProperties = Object.assign(
-      {},
-      DEFAULT_FOLD_PROPERTIES_SETTINGS,
-      this.settings.foldProperties,
-    );
-    this.settings.vaultReplace = Object.assign(
-      {},
-      DEFAULT_VAULT_REPLACE_SETTINGS,
-      this.settings.vaultReplace,
-    );
-    this.settings.stickyViewMode = Object.assign(
-      {},
-      DEFAULT_STICKY_VIEW_MODE_SETTINGS,
-      this.settings.stickyViewMode,
-    );
-    this.settings.readingFolds = Object.assign(
-      {},
-      DEFAULT_READING_FOLDS_SETTINGS,
-      this.settings.readingFolds,
-    );
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
-    this.frontmatterDates?.updateSettings(this.settings.frontmatterDates, this.settings.noteFormat);
-    this.foldProperties?.updateSettings(this.settings.foldProperties);
-    this.vaultReplace?.updateSettings(this.settings.vaultReplace);
-    this.stickyViewMode?.updateSettings(this.settings.stickyViewMode);
-    this.readingFolds?.updateSettings(this.settings.readingFolds);
   }
 }

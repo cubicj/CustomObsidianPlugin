@@ -20,20 +20,12 @@ export class FrontmatterDateManager {
   private localEditPaths = new Set<string>();
   private deferredModifiedWrites = new DeferredModifiedWriteQueue();
   private unloaded = false;
-  private plugin: Plugin;
-  private settings: FrontmatterDateSettings;
-  private formatSettings: NoteFormatSettings;
 
-  constructor(plugin: Plugin, settings: FrontmatterDateSettings, formatSettings: NoteFormatSettings) {
-    this.plugin = plugin;
-    this.settings = settings;
-    this.formatSettings = formatSettings;
-  }
-
-  updateSettings(settings: FrontmatterDateSettings, formatSettings: NoteFormatSettings) {
-    this.settings = settings;
-    this.formatSettings = formatSettings;
-  }
+  constructor(
+    private plugin: Plugin,
+    private getSettings: () => FrontmatterDateSettings,
+    private getFormatSettings: () => NoteFormatSettings,
+  ) {}
 
   register() {
     this.plugin.register(() => {
@@ -85,7 +77,7 @@ export class FrontmatterDateManager {
   async backfillAll(): Promise<BackfillResult> {
     const result: BackfillResult = { processed: 0, updated: 0, skipped: 0, failed: 0 };
     for (const file of this.plugin.app.vault.getMarkdownFiles()) {
-      if (!shouldManagePath(file.path, this.settings)) {
+      if (!shouldManagePath(file.path, this.getSettings())) {
         result.skipped++;
         continue;
       }
@@ -107,20 +99,20 @@ export class FrontmatterDateManager {
   async formatAll(): Promise<BackfillResult> {
     const result: BackfillResult = { processed: 0, updated: 0, skipped: 0, failed: 0 };
     for (const file of this.plugin.app.vault.getMarkdownFiles()) {
-      if (!shouldManagePath(file.path, this.settings)) {
+      if (!shouldManagePath(file.path, this.getSettings())) {
         result.skipped++;
         continue;
       }
       result.processed++;
       try {
         const content = await this.plugin.app.vault.read(file);
-        if (formatNoteContent(content, this.formatSettings) === null) {
+        if (formatNoteContent(content, this.getFormatSettings()) === null) {
           result.skipped++;
           continue;
         }
         await this.plugin.app.vault.process(
           file,
-          (current) => formatNoteContent(current, this.formatSettings) ?? current,
+          (current) => formatNoteContent(current, this.getFormatSettings()) ?? current,
         );
         result.updated++;
       } catch {
@@ -144,14 +136,16 @@ export class FrontmatterDateManager {
     for (const write of writes) {
       const file = this.plugin.app.vault.getAbstractFileByPath(write.path);
       if (!(file instanceof TFile)) continue;
-      if (!this.settings.enabled || !shouldManagePath(file.path, this.settings)) continue;
+      const settings = this.getSettings();
+      if (!settings.enabled || !shouldManagePath(file.path, settings)) continue;
       await this.processModifiedWrite(file, write);
     }
   }
 
   private async handleCreate(file: TAbstractFile) {
-    if (!this.settings.enabled || !(file instanceof TFile)) return;
-    if (!shouldManagePath(file.path, this.settings)) return;
+    const settings = this.getSettings();
+    if (!settings.enabled || !(file instanceof TFile)) return;
+    if (!shouldManagePath(file.path, settings)) return;
     await this.processFile(file, {
       createdMs: file.stat.ctime,
       modifiedMs: file.stat.mtime,
@@ -160,8 +154,9 @@ export class FrontmatterDateManager {
   }
 
   private async handleModify(file: TAbstractFile) {
-    if (!this.settings.enabled || !(file instanceof TFile)) return;
-    if (!shouldManagePath(file.path, this.settings)) return;
+    const settings = this.getSettings();
+    if (!settings.enabled || !(file instanceof TFile)) return;
+    if (!shouldManagePath(file.path, settings)) return;
     if (!this.localEditPaths.delete(file.path)) return;
     const modifiedWrite: PendingModifiedWrite = {
       path: file.path,
@@ -181,9 +176,9 @@ export class FrontmatterDateManager {
     if (this.localEditPaths.delete(oldPath)) {
       this.localEditPaths.add(file.path);
     }
-    if (!this.settings.enabled || !(file instanceof TFile)) return;
-    if (!shouldManagePath(file.path, this.settings)) return;
-    if (this.hasDateFields(file)) return;
+    const settings = this.getSettings();
+    if (!settings.enabled || !(file instanceof TFile)) return;
+    if (!shouldManagePath(file.path, settings)) return;
     await this.backfillFile(file);
   }
 
@@ -202,7 +197,8 @@ export class FrontmatterDateManager {
     for (const write of writes) {
       const file = this.plugin.app.vault.getAbstractFileByPath(write.path);
       if (!(file instanceof TFile)) continue;
-      if (!this.settings.enabled || !shouldManagePath(file.path, this.settings)) continue;
+      const settings = this.getSettings();
+      if (!settings.enabled || !shouldManagePath(file.path, settings)) continue;
       await this.processModifiedWrite(file, write);
     }
   }
@@ -219,10 +215,10 @@ export class FrontmatterDateManager {
   private async formatFile(file: TFile) {
     try {
       const content = await this.plugin.app.vault.read(file);
-      if (formatNoteContent(content, this.formatSettings) === null) return;
+      if (formatNoteContent(content, this.getFormatSettings()) === null) return;
       await this.plugin.app.vault.process(
         file,
-        (current) => formatNoteContent(current, this.formatSettings) ?? current,
+        (current) => formatNoteContent(current, this.getFormatSettings()) ?? current,
       );
     } catch (error) {
       new Notice(String(error));
@@ -234,7 +230,7 @@ export class FrontmatterDateManager {
     let changed = false;
     try {
       await this.plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
-        changed = applyDateFrontmatter(frontmatter, this.settings, options);
+        changed = applyDateFrontmatter(frontmatter, this.getSettings(), options);
       });
       return changed;
     } catch (error) {
@@ -246,6 +242,7 @@ export class FrontmatterDateManager {
   private hasDateFields(file: TFile): boolean {
     const frontmatter = this.plugin.app.metadataCache.getFileCache(file)?.frontmatter;
     if (!frontmatter) return false;
-    return Boolean(frontmatter[this.settings.createdField] && frontmatter[this.settings.modifiedField]);
+    const settings = this.getSettings();
+    return Boolean(frontmatter[settings.createdField] && frontmatter[settings.modifiedField]);
   }
 }

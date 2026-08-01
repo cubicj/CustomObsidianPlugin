@@ -1,14 +1,34 @@
 import { MarkdownView } from "obsidian";
 
-let originalSetEphemeralState: Function | null = null;
+type SetEphemeralState = (this: MarkdownView, state: unknown) => void;
+
+interface CodeMirrorLike {
+  hasFocus: boolean;
+  contentDOM: HTMLElement;
+}
+
+interface MarkdownViewLike {
+  editor?: {
+    cm?: CodeMirrorLike;
+  };
+}
+
+let originalSetEphemeralState: SetEphemeralState | null = null;
 
 export function enableNoAutoFocus() {
-  originalSetEphemeralState = MarkdownView.prototype.setEphemeralState;
-  MarkdownView.prototype.setEphemeralState = function (state: any) {
+  const setEphemeralState = MarkdownView.prototype.setEphemeralState;
+  if (typeof setEphemeralState !== "function") {
+    return;
+  }
+  originalSetEphemeralState = setEphemeralState;
+  MarkdownView.prototype.setEphemeralState = function (state: unknown) {
     if (originalSetEphemeralState) {
-      originalSetEphemeralState.call(this, { ...state, focus: false });
+      originalSetEphemeralState.call(this, {
+        ...(state as Record<PropertyKey, unknown>),
+        focus: false,
+      });
       requestAnimationFrame(() => {
-        const cm = (this as any).editor?.cm;
+        const cm = (this as unknown as MarkdownViewLike).editor?.cm;
         if (cm?.hasFocus) {
           cm.contentDOM.blur();
         }
@@ -19,7 +39,7 @@ export function enableNoAutoFocus() {
 
 export function disableNoAutoFocus() {
   if (originalSetEphemeralState) {
-    MarkdownView.prototype.setEphemeralState = originalSetEphemeralState as any;
+    MarkdownView.prototype.setEphemeralState = originalSetEphemeralState;
     originalSetEphemeralState = null;
   }
 }

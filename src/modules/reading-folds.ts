@@ -1,9 +1,10 @@
-import { MarkdownPreviewView, Plugin, TFile } from "obsidian";
+import { MarkdownPreviewView, MarkdownView, Plugin, TFile } from "obsidian";
 import {
   collectHeadingFoldLines,
   countLines,
   isHeadingSectionHtml,
 } from "./reading-folds-utils";
+import type { AppWithFoldManager } from "./obsidian-internals";
 
 export interface ReadingFoldsSettings {
   enabled: boolean;
@@ -57,13 +58,8 @@ interface VaultLike {
   getConfig?: (key: string) => unknown;
 }
 
-interface FoldManagerLike {
-  load?: (file: TFile) => unknown;
-}
-
-interface AppLike {
+interface AppLike extends AppWithFoldManager {
   vault?: VaultLike;
-  foldManager?: FoldManagerLike;
 }
 
 interface PendingParseFinish {
@@ -73,15 +69,13 @@ interface PendingParseFinish {
 }
 
 export class ReadingFoldsManager {
-  private plugin: Plugin;
-  private settings: ReadingFoldsSettings;
   private originalSet: PreviewSet | null = null;
   private pending = new Map<RendererLike, PendingParseFinish>();
 
-  constructor(plugin: Plugin, settings: ReadingFoldsSettings) {
-    this.plugin = plugin;
-    this.settings = settings;
-  }
+  constructor(
+    private plugin: Plugin,
+    private getSettings: () => ReadingFoldsSettings,
+  ) {}
 
   register(): void {
     const proto = MarkdownPreviewView.prototype as unknown as MarkdownPreviewPrototypeLike;
@@ -107,6 +101,11 @@ export class ReadingFoldsManager {
         }
       }
     };
+    this.plugin.registerEvent(
+      this.plugin.app.workspace.on("layout-change", () => {
+        this.sweepPending();
+      }),
+    );
     this.plugin.register(() => {
       if (this.originalSet) {
         proto.set = this.originalSet;
@@ -118,17 +117,13 @@ export class ReadingFoldsManager {
     });
   }
 
-  updateSettings(settings: ReadingFoldsSettings): void {
-    this.settings = settings;
-  }
-
   private preload(
     previewView: MarkdownPreviewView,
     preview: MarkdownPreviewViewLike,
     renderer: RendererLike,
     data: unknown,
   ): void {
-    if (!this.settings.enabled || typeof data !== "string") {
+    if (!this.getSettings().enabled || typeof data !== "string") {
       this.clearPending(renderer);
       return;
     }
@@ -223,6 +218,28 @@ export class ReadingFoldsManager {
         section.setCollapsed(collapsed);
       } else {
         section.headingCollapsed = collapsed;
+      }
+    }
+  }
+
+  private sweepPending(): void {
+    const liveRenderers = new Set<RendererLike>();
+    for (const leaf of this.plugin.app.workspace.getLeavesOfType("markdown")) {
+      if (!(leaf.view instanceof MarkdownView)) {
+        continue;
+      }
+      const view = leaf.view as unknown as MarkdownViewLike;
+      if (typeof view.previewMode !== "object" || view.previewMode === null) {
+        continue;
+      }
+      const preview = view.previewMode as MarkdownPreviewViewLike;
+      if (typeof preview.renderer === "object" && preview.renderer !== null) {
+        liveRenderers.add(preview.renderer as RendererLike);
+      }
+    }
+    for (const renderer of [...this.pending.keys()]) {
+      if (!liveRenderers.has(renderer)) {
+        this.clearPending(renderer);
       }
     }
   }

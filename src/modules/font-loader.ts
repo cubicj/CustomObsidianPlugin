@@ -48,7 +48,7 @@ function getDefaultCss(fontFamily: string): string {
 function applyCss(css: string, id: string) {
   const existing = document.getElementById(id);
   const style = document.createElement("style");
-  style.innerHTML = css;
+  style.textContent = css;
   style.id = id;
   document.head.appendChild(style);
   if (existing) existing.remove();
@@ -92,6 +92,20 @@ export class FontLoader {
 
     if (options?.refreshCache || !(await this.app.vault.adapter.exists(cssCachePath))) {
       await this.convertFontToCss(fileName, this.normalizeFontFolder(settings.fontFolder), cssCachePath);
+      const listing = await this.app.vault.adapter.list(this.pluginFolder);
+      for (const path of listing.files) {
+        if (
+          !path.endsWith(".css") ||
+          path === cssCachePath ||
+          path === `${this.pluginFolder}/styles.css`
+        ) {
+          continue;
+        }
+        try {
+          await this.app.vault.adapter.remove(path);
+        } catch {
+        }
+      }
     }
 
     const content = await this.app.vault.adapter.read(cssCachePath);

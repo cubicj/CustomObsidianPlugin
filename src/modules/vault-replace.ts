@@ -29,22 +29,15 @@ export interface ReplaceResult {
 }
 
 export class VaultReplaceManager {
-  private plugin: Plugin;
-  private settings: VaultReplaceSettings;
   private registered = false;
 
-  constructor(plugin: Plugin, settings: VaultReplaceSettings) {
-    this.plugin = plugin;
-    this.settings = settings;
-  }
+  constructor(
+    private plugin: Plugin,
+    private getSettings: () => VaultReplaceSettings,
+  ) {}
 
   register(): void {
     this.injectStyles();
-    this.syncCommand();
-  }
-
-  updateSettings(settings: VaultReplaceSettings): void {
-    this.settings = settings;
     this.syncCommand();
   }
 
@@ -89,7 +82,7 @@ export class VaultReplaceManager {
   }
 
   private syncCommand(): void {
-    if (this.settings.enabled) {
+    if (this.getSettings().enabled) {
       if (this.registered) {
         return;
       }

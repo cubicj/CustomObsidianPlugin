@@ -17,15 +17,13 @@ interface LeafPrototypeLike {
 }
 
 export class StickyViewModeManager {
-  private plugin: Plugin;
-  private settings: StickyViewModeSettings;
   private snapshots = new WeakMap<WorkspaceLeaf, StickySnapshot>();
   private originalSetViewState: SetViewState | null = null;
 
-  constructor(plugin: Plugin, settings: StickyViewModeSettings) {
-    this.plugin = plugin;
-    this.settings = settings;
-  }
+  constructor(
+    private plugin: Plugin,
+    private getSettings: () => StickyViewModeSettings,
+  ) {}
 
   register(): void {
     const proto = WorkspaceLeaf.prototype as unknown as LeafPrototypeLike;
@@ -39,7 +37,7 @@ export class StickyViewModeManager {
       const decision = decideStickyViewMode(
         viewState,
         manager.snapshots.get(this) ?? null,
-        manager.settings.enabled,
+        manager.getSettings().enabled,
       );
       if (decision.action === "record") {
         manager.snapshots.set(this, decision.snapshot);
@@ -56,9 +54,5 @@ export class StickyViewModeManager {
         this.originalSetViewState = null;
       }
     });
-  }
-
-  updateSettings(settings: StickyViewModeSettings): void {
-    this.settings = settings;
   }
 }

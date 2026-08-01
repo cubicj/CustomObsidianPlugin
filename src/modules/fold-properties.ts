@@ -1,15 +1,6 @@
 import { Plugin, TFile } from "obsidian";
 import { injectPropertiesFold } from "./fold-properties-utils";
-
-type FoldManagerLoad = (file: TFile | null) => unknown;
-
-interface FoldManagerLike {
-  load: FoldManagerLoad;
-}
-
-interface AppWithFoldManager {
-  foldManager?: FoldManagerLike;
-}
+import type { AppWithFoldManager, FoldManagerLoad } from "./obsidian-internals";
 
 export interface FoldPropertiesSettings {
   enabled: boolean;
@@ -20,14 +11,12 @@ export const DEFAULT_FOLD_PROPERTIES_SETTINGS: FoldPropertiesSettings = {
 };
 
 export class FoldPropertiesManager {
-  private plugin: Plugin;
-  private settings: FoldPropertiesSettings;
   private originalLoad: FoldManagerLoad | null = null;
 
-  constructor(plugin: Plugin, settings: FoldPropertiesSettings) {
-    this.plugin = plugin;
-    this.settings = settings;
-  }
+  constructor(
+    private plugin: Plugin,
+    private getSettings: () => FoldPropertiesSettings,
+  ) {}
 
   register(): void {
     const foldManager = (this.plugin.app as unknown as AppWithFoldManager).foldManager;
@@ -39,7 +28,7 @@ export class FoldPropertiesManager {
     const manager = this;
     foldManager.load = function (file: TFile | null) {
       const info = originalLoad.call(foldManager, file);
-      if (!manager.settings.enabled || !file || !manager.hasFrontmatter(file)) {
+      if (!manager.getSettings().enabled || !file || !manager.hasFrontmatter(file)) {
         return info;
       }
       return injectPropertiesFold(info);
@@ -50,10 +39,6 @@ export class FoldPropertiesManager {
         this.originalLoad = null;
       }
     });
-  }
-
-  updateSettings(settings: FoldPropertiesSettings): void {
-    this.settings = settings;
   }
 
   private hasFrontmatter(file: TFile): boolean {
