@@ -37,6 +37,7 @@ import {
   ReadingBracketsManager,
 } from "./modules/reading-brackets";
 import type { ReadingBracketsSettings } from "./modules/reading-brackets";
+import { ReadingListBlankLinesManager } from "./modules/reading-list-blank-lines";
 import { CubicJCoreSettingTab } from "./settings-tab";
 
 interface CubicJCoreSettings {
@@ -72,6 +73,7 @@ export default class CubicJCorePlugin extends Plugin {
   stickyViewMode!: StickyViewModeManager;
   readingFolds!: ReadingFoldsManager;
   readingBrackets!: ReadingBracketsManager;
+  readingListBlankLines!: ReadingListBlankLinesManager;
 
   async onload() {
     await this.loadSettings();
@@ -103,6 +105,9 @@ export default class CubicJCorePlugin extends Plugin {
 
     this.readingBrackets = new ReadingBracketsManager(this, () => this.settings.readingBrackets);
     this.readingBrackets.register();
+
+    this.readingListBlankLines = new ReadingListBlankLinesManager(this);
+    this.readingListBlankLines.register();
 
     this.registerEditorExtension(createHeadingEnterExtension(() => this.settings.noteFormat));
     this.registerEditorExtension(createEagerParseExtension(() => this.settings.eagerParse));
