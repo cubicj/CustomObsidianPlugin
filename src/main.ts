@@ -32,6 +32,11 @@ import {
   ReadingFoldsManager,
 } from "./modules/reading-folds";
 import type { ReadingFoldsSettings } from "./modules/reading-folds";
+import {
+  DEFAULT_READING_BRACKETS_SETTINGS,
+  ReadingBracketsManager,
+} from "./modules/reading-brackets";
+import type { ReadingBracketsSettings } from "./modules/reading-brackets";
 import { CubicJCoreSettingTab } from "./settings-tab";
 
 interface CubicJCoreSettings {
@@ -43,6 +48,7 @@ interface CubicJCoreSettings {
   vaultReplace: VaultReplaceSettings;
   stickyViewMode: StickyViewModeSettings;
   readingFolds: ReadingFoldsSettings;
+  readingBrackets: ReadingBracketsSettings;
 }
 
 const DEFAULT_SETTINGS: CubicJCoreSettings = {
@@ -54,6 +60,7 @@ const DEFAULT_SETTINGS: CubicJCoreSettings = {
   vaultReplace: DEFAULT_VAULT_REPLACE_SETTINGS,
   stickyViewMode: DEFAULT_STICKY_VIEW_MODE_SETTINGS,
   readingFolds: DEFAULT_READING_FOLDS_SETTINGS,
+  readingBrackets: DEFAULT_READING_BRACKETS_SETTINGS,
 };
 
 export default class CubicJCorePlugin extends Plugin {
@@ -64,6 +71,7 @@ export default class CubicJCorePlugin extends Plugin {
   vaultReplace!: VaultReplaceManager;
   stickyViewMode!: StickyViewModeManager;
   readingFolds!: ReadingFoldsManager;
+  readingBrackets!: ReadingBracketsManager;
 
   async onload() {
     await this.loadSettings();
@@ -92,6 +100,9 @@ export default class CubicJCorePlugin extends Plugin {
 
     this.readingFolds = new ReadingFoldsManager(this, () => this.settings.readingFolds);
     this.readingFolds.register();
+
+    this.readingBrackets = new ReadingBracketsManager(this, () => this.settings.readingBrackets);
+    this.readingBrackets.register();
 
     this.registerEditorExtension(createHeadingEnterExtension(() => this.settings.noteFormat));
     this.registerEditorExtension(createEagerParseExtension(() => this.settings.eagerParse));
