@@ -3,6 +3,14 @@ export interface MatcherOptions {
   useRegex: boolean;
 }
 
+export interface ScanInput extends MatcherOptions {
+  query: string;
+}
+
+export interface ScanSnapshot extends ScanInput {
+  regex: RegExp;
+}
+
 export type MatcherResult = { ok: true; regex: RegExp } | { ok: false; error: string };
 
 export interface Match {
@@ -11,12 +19,27 @@ export interface Match {
   line: number;
   column: number;
   lineText: string;
+  additionalLines: number;
 }
 
 export interface PreviewSegments {
   before: string;
   match: string;
   after: string;
+}
+
+export interface MatchPreview extends PreviewSegments {
+  additionalLines: number;
+}
+
+export interface ScannedFileMatches<T extends { path: string }> {
+  file: T;
+  matches: Match[];
+}
+
+export interface FileScanResult<T extends { path: string }> {
+  results: ScannedFileMatches<T>[];
+  failed: number;
 }
 
 const ELLIPSIS = "…";
@@ -33,6 +56,22 @@ export function buildMatcher(query: string, options: MatcherOptions): MatcherRes
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+export function resolveReplaceSnapshot(
+  snapshot: ScanSnapshot | null,
+  input: ScanInput,
+): ScanSnapshot | null {
+  if (
+    snapshot === null ||
+    snapshot.query.length === 0 ||
+    snapshot.query !== input.query ||
+    snapshot.caseSensitive !== input.caseSensitive ||
+    snapshot.useRegex !== input.useRegex
+  ) {
+    return null;
+  }
+  return snapshot;
 }
 
 function buildLineStarts(content: string): number[] {
@@ -77,6 +116,7 @@ export function findMatches(content: string, regex: RegExp): Match[] {
       line,
       column: start - lineStart,
       lineText: rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine,
+      additionalLines: match[0].split("\n").length - 1,
     });
     if (match[0].length === 0) {
       regex.lastIndex = start + 1;
@@ -104,6 +144,40 @@ export function buildPreviewLine(
     match: lineText.slice(column, end),
     after: lineText.slice(end, to) + (to < lineText.length ? ELLIPSIS : ""),
   };
+}
+
+export function buildMatchPreview(match: Match, radius: number): MatchPreview {
+  const firstLineLength = Math.min(
+    match.end - match.start,
+    Math.max(0, match.lineText.length - match.column),
+  );
+  return {
+    ...buildPreviewLine(match.lineText, match.column, firstLineLength, radius),
+    additionalLines: match.additionalLines,
+  };
+}
+
+export async function scanMatchingFiles<T extends { path: string }>(
+  files: readonly T[],
+  regex: RegExp,
+  read: (file: T) => Promise<string>,
+  onFailure?: (file: T, error: unknown) => void,
+): Promise<FileScanResult<T>> {
+  const results: ScannedFileMatches<T>[] = [];
+  let failed = 0;
+  for (const file of files) {
+    try {
+      const matches = findMatches(await read(file), regex);
+      if (matches.length > 0) {
+        results.push({ file, matches });
+      }
+    } catch (error) {
+      failed++;
+      onFailure?.(file, error);
+    }
+  }
+  results.sort((left, right) => left.file.path.localeCompare(right.file.path));
+  return { results, failed };
 }
 
 export function applyReplace(

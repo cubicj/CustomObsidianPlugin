@@ -4,8 +4,8 @@ import {
   VAULT_REPLACE_STYLES,
   VaultReplaceModal,
 } from "./vault-replace-modal";
-import { applyReplace, findMatches } from "./vault-replace-utils";
-import type { Match } from "./vault-replace-utils";
+import { applyReplace, findMatches, scanMatchingFiles } from "./vault-replace-utils";
+import type { ScannedFileMatches } from "./vault-replace-utils";
 
 export interface VaultReplaceSettings {
   enabled: boolean;
@@ -17,9 +17,11 @@ export const DEFAULT_VAULT_REPLACE_SETTINGS: VaultReplaceSettings = {
 
 export const VAULT_REPLACE_COMMAND_ID = "open-vault-replace";
 
-export interface FileMatches {
-  file: TFile;
-  matches: Match[];
+export type FileMatches = ScannedFileMatches<TFile>;
+
+export interface ScanResult {
+  results: FileMatches[];
+  failed: number;
 }
 
 export interface ReplaceResult {
@@ -41,17 +43,15 @@ export class VaultReplaceManager {
     this.syncCommand();
   }
 
-  async scan(regex: RegExp): Promise<FileMatches[]> {
-    const results: FileMatches[] = [];
-    for (const file of this.plugin.app.vault.getMarkdownFiles()) {
-      const content = await this.plugin.app.vault.cachedRead(file);
-      const matches = findMatches(content, regex);
-      if (matches.length > 0) {
-        results.push({ file, matches });
-      }
-    }
-    results.sort((left, right) => left.file.path.localeCompare(right.file.path));
-    return results;
+  async scan(regex: RegExp): Promise<ScanResult> {
+    return scanMatchingFiles(
+      this.plugin.app.vault.getMarkdownFiles(),
+      regex,
+      (file) => this.plugin.app.vault.cachedRead(file),
+      (file, error) => {
+        console.warn("CubicJ Core vault replace scan failed", file.path, error);
+      },
+    );
   }
 
   async replace(

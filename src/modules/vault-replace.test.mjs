@@ -2,10 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   applyReplace,
+  buildMatchPreview,
   buildMatcher,
   buildPreviewLine,
   escapeRegExp,
   findMatches,
+  resolveReplaceSnapshot,
+  scanMatchingFiles,
 } from "./vault-replace-utils.ts";
 
 function compile(query, options = {}) {
@@ -54,6 +57,7 @@ test("findMatches reports offsets, line index, column and line text", () => {
     line: 1,
     column: 5,
     lineText: "beta target gamma",
+    additionalLines: 0,
   });
   assert.deepEqual(matches[1], {
     start: 24,
@@ -61,6 +65,7 @@ test("findMatches reports offsets, line index, column and line text", () => {
     line: 2,
     column: 0,
     lineText: "target",
+    additionalLines: 0,
   });
 });
 
@@ -97,6 +102,56 @@ test("buildPreviewLine leaves short lines intact", () => {
     match: "target",
     after: " b",
   });
+});
+
+test("buildMatchPreview annotates a match spanning multiple lines", () => {
+  const [match] = findMatches("before START\nmiddle\nEND after", compile("START[\\s\\S]*?END", { useRegex: true }));
+  assert.deepEqual(buildMatchPreview(match, 40), {
+    before: "before ",
+    match: "START",
+    after: "",
+    additionalLines: 2,
+  });
+});
+
+test("resolveReplaceSnapshot rejects an empty find query", () => {
+  const snapshot = {
+    query: "",
+    caseSensitive: false,
+    useRegex: false,
+    regex: /(?:)/gi,
+  };
+  assert.equal(resolveReplaceSnapshot(snapshot, snapshot), null);
+});
+
+test("resolveReplaceSnapshot rejects changed search inputs", () => {
+  const snapshot = {
+    query: "target",
+    caseSensitive: false,
+    useRegex: false,
+    regex: /target/gi,
+  };
+  assert.equal(resolveReplaceSnapshot(snapshot, { ...snapshot, query: "other" }), null);
+  assert.equal(resolveReplaceSnapshot(snapshot, { ...snapshot, caseSensitive: true }), null);
+  assert.equal(resolveReplaceSnapshot(snapshot, { ...snapshot, useRegex: true }), null);
+  assert.equal(resolveReplaceSnapshot(snapshot, snapshot), snapshot);
+});
+
+test("scanMatchingFiles continues after a file read failure", async () => {
+  const files = [{ path: "z.md" }, { path: "broken.md" }, { path: "a.md" }];
+  const contents = new Map([
+    ["z.md", "hit last"],
+    ["a.md", "hit first"],
+  ]);
+  const result = await scanMatchingFiles(files, compile("hit"), async (file) => {
+    if (file.path === "broken.md") {
+      throw new Error("unreadable");
+    }
+    return contents.get(file.path);
+  });
+  assert.equal(result.failed, 1);
+  assert.deepEqual(result.results.map((item) => item.file.path), ["a.md", "z.md"]);
+  assert.deepEqual(result.results.map((item) => item.matches.length), [1, 1]);
 });
 
 test("applyReplace inserts literal replacements verbatim", () => {
