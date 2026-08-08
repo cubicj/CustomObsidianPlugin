@@ -33,6 +33,11 @@ import {
 } from "./modules/reading-folds";
 import type { ReadingFoldsSettings } from "./modules/reading-folds";
 import {
+  DEFAULT_FOLD_REMAP_SETTINGS,
+  FoldRemapManager,
+} from "./modules/fold-remap";
+import type { FoldRemapSettings } from "./modules/fold-remap";
+import {
   DEFAULT_READING_BRACKETS_SETTINGS,
   ReadingBracketsManager,
 } from "./modules/reading-brackets";
@@ -49,6 +54,7 @@ interface CubicJCoreSettings {
   vaultReplace: VaultReplaceSettings;
   stickyViewMode: StickyViewModeSettings;
   readingFolds: ReadingFoldsSettings;
+  foldRemap: FoldRemapSettings;
   readingBrackets: ReadingBracketsSettings;
 }
 
@@ -61,6 +67,7 @@ const DEFAULT_SETTINGS: CubicJCoreSettings = {
   vaultReplace: DEFAULT_VAULT_REPLACE_SETTINGS,
   stickyViewMode: DEFAULT_STICKY_VIEW_MODE_SETTINGS,
   readingFolds: DEFAULT_READING_FOLDS_SETTINGS,
+  foldRemap: DEFAULT_FOLD_REMAP_SETTINGS,
   readingBrackets: DEFAULT_READING_BRACKETS_SETTINGS,
 };
 
@@ -72,6 +79,7 @@ export default class CubicJCorePlugin extends Plugin {
   vaultReplace!: VaultReplaceManager;
   stickyViewMode!: StickyViewModeManager;
   readingFolds!: ReadingFoldsManager;
+  foldRemap!: FoldRemapManager;
   readingBrackets!: ReadingBracketsManager;
   readingListBlankLines!: ReadingListBlankLinesManager;
 
@@ -102,6 +110,9 @@ export default class CubicJCorePlugin extends Plugin {
 
     this.readingFolds = new ReadingFoldsManager(this, () => this.settings.readingFolds);
     this.readingFolds.register();
+
+    this.foldRemap = new FoldRemapManager(this, () => this.settings.foldRemap);
+    this.foldRemap.register();
 
     this.readingBrackets = new ReadingBracketsManager(this, () => this.settings.readingBrackets);
     this.readingBrackets.register();
