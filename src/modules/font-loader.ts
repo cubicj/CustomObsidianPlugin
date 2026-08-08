@@ -59,6 +59,15 @@ function removeCss(id: string) {
   if (el) el.remove();
 }
 
+function getFontCacheFileName(fileName: string): string {
+  let hash = 0xcbf29ce484222325n;
+  for (const byte of new TextEncoder().encode(fileName)) {
+    hash ^= BigInt(byte);
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return `font-${hash.toString(16).padStart(16, "0")}.css`;
+}
+
 export class FontLoader {
   private pluginFolder: string;
 
@@ -87,8 +96,7 @@ export class FontLoader {
   }
 
   private async processFont(fileName: string, settings: FontSettings, options?: { refreshCache?: boolean }) {
-    const { baseName } = this.getFontFileParts(fileName);
-    const cssCachePath = `${this.pluginFolder}/${baseName.replaceAll(".", "_")}.css`;
+    const cssCachePath = `${this.pluginFolder}/${getFontCacheFileName(fileName)}`;
 
     if (options?.refreshCache || !(await this.app.vault.adapter.exists(cssCachePath))) {
       await this.convertFontToCss(fileName, this.normalizeFontFolder(settings.fontFolder), cssCachePath);

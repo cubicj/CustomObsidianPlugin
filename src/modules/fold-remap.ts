@@ -60,6 +60,7 @@ function logFoldRemap(
 
 export class FoldRemapManager {
   private originalSave: FoldManagerSave | null = null;
+  private patchedSave: FoldManagerSave | null = null;
   private pendingRetries = new Map<string, PendingPathRetries>();
   private disposed = false;
 
@@ -83,16 +84,26 @@ export class FoldRemapManager {
     const originalSave = foldManager.save;
     this.originalSave = originalSave;
     const manager = this;
-    foldManager.save = function (file: TFile | null, info: unknown) {
+    const patchedSave: FoldManagerSave = function (
+      file: TFile | null,
+      info: unknown,
+    ) {
       return originalSave.call(foldManager, file, manager.enrich(file, info));
     };
+    this.patchedSave = patchedSave;
+    foldManager.save = patchedSave;
     this.plugin.register(() => {
       this.disposed = true;
       this.clearAllPending();
-      if (this.originalSave) {
+      if (
+        this.originalSave &&
+        this.patchedSave &&
+        foldManager.save === this.patchedSave
+      ) {
         foldManager.save = this.originalSave;
-        this.originalSave = null;
       }
+      this.originalSave = null;
+      this.patchedSave = null;
     });
     this.plugin.registerEvent(
       this.plugin.app.metadataCache.on("changed", (file, data, cache) => {

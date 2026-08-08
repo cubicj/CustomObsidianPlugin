@@ -19,6 +19,7 @@ interface LeafPrototypeLike {
 export class StickyViewModeManager {
   private snapshots = new WeakMap<WorkspaceLeaf, StickySnapshot>();
   private originalSetViewState: SetViewState | null = null;
+  private patchedSetViewState: SetViewState | null = null;
 
   constructor(
     private plugin: Plugin,
@@ -33,7 +34,10 @@ export class StickyViewModeManager {
     const original = proto.setViewState;
     this.originalSetViewState = original;
     const manager = this;
-    proto.setViewState = function (viewState: unknown, eState?: unknown) {
+    const patchedSetViewState: SetViewState = function (
+      viewState: unknown,
+      eState?: unknown,
+    ) {
       const decision = decideStickyViewMode(
         viewState,
         manager.snapshots.get(this) ?? null,
@@ -48,11 +52,18 @@ export class StickyViewModeManager {
       }
       return original.call(this, viewState, eState);
     };
+    this.patchedSetViewState = patchedSetViewState;
+    proto.setViewState = patchedSetViewState;
     this.plugin.register(() => {
-      if (this.originalSetViewState) {
+      if (
+        this.originalSetViewState &&
+        this.patchedSetViewState &&
+        proto.setViewState === this.patchedSetViewState
+      ) {
         proto.setViewState = this.originalSetViewState;
-        this.originalSetViewState = null;
       }
+      this.originalSetViewState = null;
+      this.patchedSetViewState = null;
     });
   }
 }

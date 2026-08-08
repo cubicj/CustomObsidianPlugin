@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  createReadingListSourceLineResolver,
   getReadingListKind,
   hasReadingListBlankBefore,
   isReadingListMarkerLine,
@@ -15,6 +16,15 @@ function sourceLines(source) {
 function candidate(previousLine, currentLine, kind = "unordered") {
   return { previousLine, currentLine, kind };
 }
+
+test("reuses one source-line split and rejects a different renderer snapshot", () => {
+  const resolveLines = createReadingListSourceLineResolver();
+  const first = resolveLines("- a\n\n- b");
+
+  assert.ok(first);
+  assert.strictEqual(resolveLines("- a\n\n- b"), first);
+  assert.equal(resolveLines("- x\n\n- y"), null);
+});
 
 test("does not mark adjacent unordered siblings without a blank line", () => {
   const lines = sourceLines("- a\n- b");

@@ -12,6 +12,7 @@ export const DEFAULT_FOLD_PROPERTIES_SETTINGS: FoldPropertiesSettings = {
 
 export class FoldPropertiesManager {
   private originalLoad: FoldManagerLoad | null = null;
+  private patchedLoad: FoldManagerLoad | null = null;
 
   constructor(
     private plugin: Plugin,
@@ -26,18 +27,25 @@ export class FoldPropertiesManager {
     const originalLoad = foldManager.load;
     this.originalLoad = originalLoad;
     const manager = this;
-    foldManager.load = function (file: TFile | null) {
+    const patchedLoad: FoldManagerLoad = function (file: TFile | null) {
       const info = originalLoad.call(foldManager, file);
       if (!manager.getSettings().enabled || !file || !manager.hasFrontmatter(file)) {
         return info;
       }
       return injectPropertiesFold(info);
     };
+    this.patchedLoad = patchedLoad;
+    foldManager.load = patchedLoad;
     this.plugin.register(() => {
-      if (this.originalLoad) {
+      if (
+        this.originalLoad &&
+        this.patchedLoad &&
+        foldManager.load === this.patchedLoad
+      ) {
         foldManager.load = this.originalLoad;
-        this.originalLoad = null;
       }
+      this.originalLoad = null;
+      this.patchedLoad = null;
     });
   }
 

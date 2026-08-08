@@ -13,6 +13,7 @@ interface MarkdownViewLike {
 }
 
 let originalSetEphemeralState: SetEphemeralState | null = null;
+let patchedSetEphemeralState: SetEphemeralState | null = null;
 let pendingBlurFrame: number | null = null;
 
 export function enableNoAutoFocus() {
@@ -21,27 +22,27 @@ export function enableNoAutoFocus() {
     return;
   }
   originalSetEphemeralState = setEphemeralState;
-  MarkdownView.prototype.setEphemeralState = function (state: unknown) {
-    if (originalSetEphemeralState) {
-      const target = (this as unknown as MarkdownViewLike).editor?.cm?.contentDOM;
-      originalSetEphemeralState.call(this, {
-        ...(state as Record<PropertyKey, unknown>),
-        focus: false,
-      });
-      if (pendingBlurFrame !== null) {
-        cancelAnimationFrame(pendingBlurFrame);
+  const patched: SetEphemeralState = function (state: unknown) {
+    const target = (this as unknown as MarkdownViewLike).editor?.cm?.contentDOM;
+    setEphemeralState.call(this, {
+      ...(state as Record<PropertyKey, unknown>),
+      focus: false,
+    });
+    if (pendingBlurFrame !== null) {
+      cancelAnimationFrame(pendingBlurFrame);
+      pendingBlurFrame = null;
+    }
+    if (target) {
+      pendingBlurFrame = requestAnimationFrame(() => {
         pendingBlurFrame = null;
-      }
-      if (target) {
-        pendingBlurFrame = requestAnimationFrame(() => {
-          pendingBlurFrame = null;
-          if (target.ownerDocument.activeElement === target) {
-            target.blur();
-          }
-        });
-      }
+        if (target.ownerDocument.activeElement === target) {
+          target.blur();
+        }
+      });
     }
   };
+  patchedSetEphemeralState = patched;
+  MarkdownView.prototype.setEphemeralState = patched;
 }
 
 export function disableNoAutoFocus() {
@@ -49,8 +50,13 @@ export function disableNoAutoFocus() {
     cancelAnimationFrame(pendingBlurFrame);
     pendingBlurFrame = null;
   }
-  if (originalSetEphemeralState) {
+  if (
+    originalSetEphemeralState &&
+    patchedSetEphemeralState &&
+    MarkdownView.prototype.setEphemeralState === patchedSetEphemeralState
+  ) {
     MarkdownView.prototype.setEphemeralState = originalSetEphemeralState;
-    originalSetEphemeralState = null;
   }
+  originalSetEphemeralState = null;
+  patchedSetEphemeralState = null;
 }

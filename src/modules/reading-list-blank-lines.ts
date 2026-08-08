@@ -4,6 +4,7 @@ import type {
   MarkdownSectionInformation,
 } from "obsidian";
 import {
+  createReadingListSourceLineResolver,
   getReadingListKind,
   hasReadingListBlankBefore,
   resolveReadingListSourceLine,
@@ -48,6 +49,7 @@ function clearListBlankBeforeHooks(root: HTMLElement): void {
 function annotateListContainer(
   container: HTMLElement,
   context: MarkdownPostProcessorContext,
+  resolveLines: (text: string) => readonly string[] | null,
 ): void {
   const kind = getReadingListKind(container.tagName);
   if (kind === null) {
@@ -85,8 +87,9 @@ function annotateListContainer(
       continue;
     }
 
-    const lines = currentInfo.text.split(/\r\n?|\n/u);
+    const lines = resolveLines(currentInfo.text);
     if (
+      lines === null ||
       !hasReadingListBlankBefore(lines, { kind, previousLine, currentLine }) ||
       previous.parentElement !== container ||
       current.parentElement !== container ||
@@ -103,8 +106,9 @@ function annotateListBlankLines(
   context: MarkdownPostProcessorContext,
 ): void {
   clearListBlankBeforeHooks(root);
+  const resolveLines = createReadingListSourceLineResolver();
   for (const container of collectListContainers(root)) {
-    annotateListContainer(container, context);
+    annotateListContainer(container, context, resolveLines);
   }
 }
 

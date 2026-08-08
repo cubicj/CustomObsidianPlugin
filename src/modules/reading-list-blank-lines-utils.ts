@@ -11,6 +11,21 @@ const ORDERED_LIST_PATTERN = /^[\t ]*\d+[.)](?:[\t ]+|$)/u;
 const DATA_LINE_PATTERN = /^(?:0|[1-9]\d*)$/u;
 const BLANK_LINE_PATTERN = /^[\t ]*$/u;
 
+export function createReadingListSourceLineResolver(): (
+  text: string,
+) => readonly string[] | null {
+  let cachedText: string | null = null;
+  let cachedLines: readonly string[] | null = null;
+  return (text) => {
+    if (cachedLines === null) {
+      cachedText = text;
+      cachedLines = text.split(/\r\n?|\n/u);
+      return cachedLines;
+    }
+    return text === cachedText ? cachedLines : null;
+  };
+}
+
 export function getReadingListKind(tagName: string): ReadingListKind | null {
   const normalized = tagName.toUpperCase();
   if (normalized === "UL") {

@@ -64,12 +64,14 @@ interface AppLike extends AppWithFoldManager {
 
 interface PendingParseFinish {
   originalParseFinish: ParseFinish;
+  patchedParseFinish: ParseFinish;
   expectedText: string;
   planLines: Set<number>;
 }
 
 export class ReadingFoldsManager {
   private originalSet: PreviewSet | null = null;
+  private patchedSet: PreviewSet | null = null;
   private pending = new Map<RendererLike, PendingParseFinish>();
 
   constructor(
@@ -85,7 +87,7 @@ export class ReadingFoldsManager {
     const original = proto.set;
     this.originalSet = original;
     const manager = this;
-    proto.set = function (data: unknown, clear: unknown) {
+    const patchedSet: PreviewSet = function (data: unknown, clear: unknown) {
       original.call(this, data, clear);
       let renderer: RendererLike | null = null;
       try {
@@ -101,16 +103,23 @@ export class ReadingFoldsManager {
         }
       }
     };
+    this.patchedSet = patchedSet;
+    proto.set = patchedSet;
     this.plugin.registerEvent(
       this.plugin.app.workspace.on("layout-change", () => {
         this.sweepPending();
       }),
     );
     this.plugin.register(() => {
-      if (this.originalSet) {
+      if (
+        this.originalSet &&
+        this.patchedSet &&
+        proto.set === this.patchedSet
+      ) {
         proto.set = this.originalSet;
-        this.originalSet = null;
       }
+      this.originalSet = null;
+      this.patchedSet = null;
       for (const renderer of [...this.pending.keys()]) {
         this.clearPending(renderer);
       }
@@ -171,13 +180,8 @@ export class ReadingFoldsManager {
       return;
     }
     const originalParseFinish = renderer.parseFinish;
-    this.pending.set(renderer, {
-      originalParseFinish,
-      expectedText: data,
-      planLines,
-    });
     const manager = this;
-    renderer.parseFinish = function (...args: unknown[]) {
+    const patchedParseFinish: ParseFinish = function (...args: unknown[]) {
       try {
         const result = originalParseFinish.apply(this, args);
         try {
@@ -192,6 +196,13 @@ export class ReadingFoldsManager {
         manager.clearPending(renderer);
       }
     };
+    this.pending.set(renderer, {
+      originalParseFinish,
+      patchedParseFinish,
+      expectedText: data,
+      planLines,
+    });
+    renderer.parseFinish = patchedParseFinish;
   }
 
   private applyPlan(renderer: RendererLike, planLines: Set<number>): void {
@@ -251,7 +262,9 @@ export class ReadingFoldsManager {
     }
     this.pending.delete(renderer);
     try {
-      renderer.parseFinish = pending.originalParseFinish;
+      if (renderer.parseFinish === pending.patchedParseFinish) {
+        renderer.parseFinish = pending.originalParseFinish;
+      }
     } catch {
     }
   }
