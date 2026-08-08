@@ -55,6 +55,16 @@ test("buildHeadingSignatures signs only folds sitting on heading lines", () => {
   assert.deepEqual(buildHeadingSignatures("junk", headings), []);
 });
 
+test("buildHeadingSignatures signs a heading folded at line zero", () => {
+  assert.deepEqual(
+    buildHeadingSignatures(
+      [{ from: 0, to: 0 }],
+      [{ line: 0, level: 1, text: "Alpha" }],
+    ),
+    [{ from: 0, level: 1, text: "Alpha", occurrence: 0 }],
+  );
+});
+
 test("remapFoldEntry leaves valid entries alone", () => {
   const entry = {
     folds: [{ from: 2, to: 5 }],
@@ -64,6 +74,25 @@ test("remapFoldEntry leaves valid entries alone", () => {
   assert.deepEqual(
     remapFoldEntry(entry, [{ line: 2, level: 1, text: "Alpha" }], 10),
     { action: "keep" },
+  );
+});
+
+test("remapFoldEntry remaps moved headings when the line count is unchanged", () => {
+  const entry = {
+    folds: [{ from: 2, to: 5 }],
+    lines: 10,
+    cubicjHeadings: [{ from: 2, level: 1, text: "Alpha", occurrence: 0 }],
+  };
+  assert.deepEqual(
+    remapFoldEntry(entry, [{ line: 4, level: 1, text: "Alpha" }], 10),
+    {
+      action: "write",
+      value: {
+        folds: [{ from: 4, to: 4 }],
+        lines: 10,
+        cubicjHeadings: [{ from: 4, level: 1, text: "Alpha", occurrence: 0 }],
+      },
+    },
   );
 });
 
@@ -125,6 +154,38 @@ test("remapFoldEntry remaps a moved heading fold and updates lines and signature
         lines: 15,
         cubicjHeadings: [{ from: 7, level: 1, text: "Alpha", occurrence: 0 }],
         extraneous: "kept",
+      },
+    },
+  );
+});
+
+test("remapFoldEntry keeps a line-zero heading signature across consecutive remaps", () => {
+  const first = remapFoldEntry(
+    {
+      folds: [{ from: 3, to: 6 }],
+      lines: 8,
+      cubicjHeadings: [{ from: 3, level: 1, text: "Alpha", occurrence: 0 }],
+    },
+    [{ line: 0, level: 1, text: "Alpha" }],
+    6,
+  );
+  assert.deepEqual(first, {
+    action: "write",
+    value: {
+      folds: [{ from: 0, to: 0 }],
+      lines: 6,
+      cubicjHeadings: [{ from: 0, level: 1, text: "Alpha", occurrence: 0 }],
+    },
+  });
+  assert.equal(first.action, "write");
+  assert.deepEqual(
+    remapFoldEntry(first.value, [{ line: 2, level: 1, text: "Alpha" }], 7),
+    {
+      action: "write",
+      value: {
+        folds: [{ from: 2, to: 2 }],
+        lines: 7,
+        cubicjHeadings: [{ from: 2, level: 1, text: "Alpha", occurrence: 0 }],
       },
     },
   );
@@ -218,6 +279,28 @@ test("remapFoldEntry preserves the properties marker and drops unmatched folds",
       cubicjHeadings: [{ from: 4, level: 1, text: "Kept", occurrence: 0 }],
     },
   });
+});
+
+test("remapFoldEntry does not let a properties marker displace a heading remapped to line zero", () => {
+  const entry = {
+    folds: [
+      { from: 0, to: 0 },
+      { from: 3, to: 6 },
+    ],
+    lines: 8,
+    cubicjHeadings: [{ from: 3, level: 1, text: "Alpha", occurrence: 0 }],
+  };
+  assert.deepEqual(
+    remapFoldEntry(entry, [{ line: 0, level: 1, text: "Alpha" }], 6),
+    {
+      action: "write",
+      value: {
+        folds: [{ from: 0, to: 0 }],
+        lines: 6,
+        cubicjHeadings: [{ from: 0, level: 1, text: "Alpha", occurrence: 0 }],
+      },
+    },
+  );
 });
 
 test("remapFoldEntry deletes the entry when nothing survives", () => {

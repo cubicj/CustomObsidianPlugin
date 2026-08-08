@@ -94,7 +94,7 @@ export function buildHeadingSignatures(
   }
   const signatures: HeadingSignature[] = [];
   for (const value of folds) {
-    if (!isFoldRange(value) || isPropertiesMarker(value)) {
+    if (!isFoldRange(value)) {
       continue;
     }
     const heading = byLine.get(value.from);
@@ -156,9 +156,6 @@ export function remapFoldEntry(
   ) {
     return { action: "none" };
   }
-  if (record.lines === lineCount) {
-    return { action: "keep" };
-  }
   const folds = record.folds as FoldRangeLike[];
   const signatures = record.cubicjHeadings as HeadingSignature[];
   const availableLines = new Map<string, number[]>();
@@ -170,6 +167,17 @@ export function remapFoldEntry(
     } else {
       availableLines.set(key, [heading.line]);
     }
+  }
+  if (
+    record.lines === lineCount &&
+    signatures.every(
+      (signature) =>
+        availableLines.get(headingKey(signature.level, signature.text))?.[
+          signature.occurrence
+        ] === signature.from,
+    )
+  ) {
+    return { action: "keep" };
   }
   const signatureByFrom = new Map<number, HeadingSignature>();
   const matchedLineByFrom = new Map<number, number>();
@@ -189,15 +197,13 @@ export function remapFoldEntry(
   const newFolds: FoldRangeLike[] = [];
   const newSignatures: HeadingSignature[] = [];
   const usedLines = new Set<number>();
+  let hasPropertiesMarker = false;
   for (const fold of folds) {
-    if (isPropertiesMarker(fold)) {
-      if (!usedLines.has(0)) {
-        usedLines.add(0);
-        newFolds.push({ from: 0, to: 0 });
-      }
+    const signature = signatureByFrom.get(fold.from);
+    if (isPropertiesMarker(fold) && !signature) {
+      hasPropertiesMarker = true;
       continue;
     }
-    const signature = signatureByFrom.get(fold.from);
     if (!signature) {
       continue;
     }
@@ -213,6 +219,9 @@ export function remapFoldEntry(
       text: signature.text,
       occurrence: signature.occurrence,
     });
+  }
+  if (hasPropertiesMarker && !usedLines.has(0)) {
+    newFolds.unshift({ from: 0, to: 0 });
   }
   if (newFolds.length === 0) {
     return { action: "delete" };
