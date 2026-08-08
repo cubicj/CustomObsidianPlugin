@@ -13,6 +13,7 @@ export interface CurrentHeading {
 
 export type RemapOutcome =
   | { action: "none" }
+  | { action: "keep" }
   | { action: "write"; value: Record<string, unknown> }
   | { action: "delete" };
 
@@ -156,7 +157,7 @@ export function remapFoldEntry(
     return { action: "none" };
   }
   if (record.lines === lineCount) {
-    return { action: "none" };
+    return { action: "keep" };
   }
   const folds = record.folds as FoldRangeLike[];
   const signatures = record.cubicjHeadings as HeadingSignature[];

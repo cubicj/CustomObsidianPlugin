@@ -36,6 +36,7 @@ interface FoldViewLike {
 
 export class FoldRemapManager {
   private originalSave: FoldManagerSave | null = null;
+  private localEditPaths = new Set<string>();
 
   constructor(
     private plugin: Plugin,
@@ -65,6 +66,17 @@ export class FoldRemapManager {
         this.originalSave = null;
       }
     });
+    this.plugin.registerEvent(
+      this.plugin.app.workspace.on("editor-change", (editor, info) => {
+        if (
+          this.getSettings().enabled &&
+          info.file instanceof TFile &&
+          editor.hasFocus()
+        ) {
+          this.localEditPaths.add(info.file.path);
+        }
+      }),
+    );
     this.plugin.registerEvent(
       this.plugin.app.metadataCache.on("changed", (file, data, cache) => {
         this.handleChanged(file, data, cache);
@@ -103,12 +115,14 @@ export class FoldRemapManager {
 
   private handleChanged(file: TFile, data: string, cache: CachedMetadata): void {
     if (!this.getSettings().enabled) {
+      this.localEditPaths.delete(file.path);
       return;
     }
     try {
       const app = this.plugin.app as unknown as AppLike;
       const entry = app.loadLocalStorage?.("note-fold-" + file.path);
       if (entry === null || entry === undefined) {
+        this.localEditPaths.delete(file.path);
         return;
       }
       const outcome = remapFoldEntry(
@@ -116,8 +130,10 @@ export class FoldRemapManager {
         collectCurrentHeadings(cache.headings),
         countLines(data),
       );
-      this.applyOutcome(file, outcome);
+      const locallyEdited = this.localEditPaths.delete(file.path);
+      this.applyChangedOutcome(file, entry, outcome, locallyEdited);
     } catch {
+      this.localEditPaths.delete(file.path);
     }
   }
 
@@ -157,23 +173,48 @@ export class FoldRemapManager {
         const headings = collectCurrentHeadings(
           this.plugin.app.metadataCache.getFileCache(file)?.headings,
         );
-        this.applyOutcome(file, remapFoldEntry(entry, headings, countLines(content)));
+        this.applyStartupOutcome(
+          file,
+          remapFoldEntry(entry, headings, countLines(content)),
+        );
       } catch {
       }
     }
   }
 
-  private applyOutcome(file: TFile, outcome: RemapOutcome): void {
+  private applyChangedOutcome(
+    file: TFile,
+    entry: unknown,
+    outcome: RemapOutcome,
+    locallyEdited: boolean,
+  ): void {
     const app = this.plugin.app as unknown as AppLike;
     if (outcome.action === "delete") {
       app.saveLocalStorage?.("note-fold-" + file.path, null);
       return;
     }
-    if (outcome.action !== "write") {
+    if (outcome.action === "write") {
+      app.saveLocalStorage?.("note-fold-" + file.path, outcome.value);
+      if (!locallyEdited) {
+        this.reapplyToOpenViews(file, outcome.value);
+      }
       return;
     }
-    app.saveLocalStorage?.("note-fold-" + file.path, outcome.value);
-    this.reapplyToOpenViews(file, outcome.value);
+    if (outcome.action === "keep" && !locallyEdited) {
+      this.reapplyToOpenViews(file, entry as Record<string, unknown>);
+    }
+  }
+
+  private applyStartupOutcome(file: TFile, outcome: RemapOutcome): void {
+    const app = this.plugin.app as unknown as AppLike;
+    if (outcome.action === "delete") {
+      app.saveLocalStorage?.("note-fold-" + file.path, null);
+      return;
+    }
+    if (outcome.action === "write") {
+      app.saveLocalStorage?.("note-fold-" + file.path, outcome.value);
+      this.reapplyToOpenViews(file, outcome.value);
+    }
   }
 
   private reapplyToOpenViews(file: TFile, entry: Record<string, unknown>): void {
@@ -183,9 +224,6 @@ export class FoldRemapManager {
         continue;
       }
       try {
-        if (view.getMode() === "source" && view.editor.hasFocus()) {
-          continue;
-        }
         const viewLike = view as unknown as FoldViewLike;
         const mode = viewLike.currentMode;
         if (mode && typeof mode.applyFoldInfo === "function") {

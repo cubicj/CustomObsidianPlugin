@@ -63,7 +63,7 @@ test("remapFoldEntry leaves valid entries alone", () => {
   };
   assert.deepEqual(
     remapFoldEntry(entry, [{ line: 2, level: 1, text: "Alpha" }], 10),
-    { action: "none" },
+    { action: "keep" },
   );
 });
 
