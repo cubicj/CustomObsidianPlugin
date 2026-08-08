@@ -5,6 +5,7 @@ import {
   formatNoteContent,
   isBlankLine,
   isHeadingLine,
+  isNormalRegionLine,
   scanRegions,
 } from "./note-format-utils.ts";
 
@@ -84,6 +85,15 @@ test("scanRegions does not close a fence with trailing content on the delimiter"
 test("scanRegions tolerates CRLF frontmatter delimiters", () => {
   const lines = ["---\r", "a: 1\r", "---\r", "# Title\r"];
   assert.deepEqual(scanRegions(lines), ["frontmatter", "frontmatter", "frontmatter", "normal"]);
+});
+
+test("classifies a heading-shaped line inside closed frontmatter against the whole document", () => {
+  assert.equal(isNormalRegionLine(["---", "# comment", "key: value", "---", "body"], 1), false);
+  assert.equal(isNormalRegionLine(["---", "# comment", "key: value", "...", "body"], 1), false);
+});
+
+test("classifies a heading-shaped line after an unterminated frontmatter candidate as normal", () => {
+  assert.equal(isNormalRegionLine(["---", "# comment", "key: value"], 1), true);
 });
 
 const ALL_ON = DEFAULT_NOTE_FORMAT_SETTINGS;
@@ -283,4 +293,31 @@ test("applies every rule together in order", () => {
 test("returns null for content that is already fully formatted", () => {
   const input = "---\na: 1\n---\n# Title\n\n- item\n\nbody\n\n## Next\n\ntail\n";
   assert.equal(formatNoteContent(input, ALL_ON), null);
+});
+
+test("uses CRLF for blank lines inserted around headings", () => {
+  const input = "intro\r\n# Title\r\nbody\r\n";
+  const expected = "intro\r\n\r\n# Title\r\n\r\nbody\r\n";
+  assert.equal(formatNoteContent(input, ONLY_HEADINGS), expected);
+  assert.equal(formatNoteContent(expected, ONLY_HEADINGS), null);
+});
+
+test("uses CRLF for blank lines inserted after list items", () => {
+  const input = "- item\r\ntext\r\n";
+  const expected = "- item\r\n\r\ntext\r\n";
+  assert.equal(formatNoteContent(input, ONLY_LIST), expected);
+  assert.equal(formatNoteContent(expected, ONLY_LIST), null);
+});
+
+test("preserves CRLF while collapsing blank lines", () => {
+  const input = "a\r\n\r\n\r\nb\r\n";
+  const expected = "a\r\n\r\nb\r\n";
+  assert.equal(formatNoteContent(input, ONLY_COLLAPSE), expected);
+  assert.equal(formatNoteContent(expected, ONLY_COLLAPSE), null);
+});
+
+test("uses CRLF when normalizing the trailing newline", () => {
+  assert.equal(formatNoteContent("first\r\nlast", ONLY_TRAILING), "first\r\nlast\r\n");
+  assert.equal(formatNoteContent("text\r\n\r\n", ONLY_TRAILING), "text\r\n");
+  assert.equal(formatNoteContent("text\r\n", ONLY_TRAILING), null);
 });

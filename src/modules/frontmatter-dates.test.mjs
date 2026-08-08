@@ -5,6 +5,7 @@ import {
   DeferredModifiedWriteQueue,
   DEFAULT_FRONTMATTER_DATE_SETTINGS,
   formatKstTimestamp,
+  processDeferredModifiedWrites,
   shouldDeferModifiedWrite,
   shouldManagePath,
   splitPathList,
@@ -162,4 +163,29 @@ test("drains deferred modified writes once for plugin unload", () => {
     },
   ]);
   assert.deepEqual(queue.drain(), []);
+});
+
+test("continues a deferred write batch after one write rejects", async () => {
+  const writes = [
+    { path: "1. Inbox/first.md", createdMs: 1, modifiedMs: 2 },
+    { path: "2. Hubs/failing.md", createdMs: 3, modifiedMs: 4 },
+    { path: "3. Resources/last.md", createdMs: 5, modifiedMs: 6 },
+  ];
+  const processed = [];
+  const failures = [];
+  const failure = new Error("write failed");
+
+  await processDeferredModifiedWrites(
+    writes,
+    async (write) => {
+      processed.push(write.path);
+      if (write.path === "2. Hubs/failing.md") throw failure;
+    },
+    (write, error) => {
+      failures.push([write.path, error]);
+    },
+  );
+
+  assert.deepEqual(processed, ["1. Inbox/first.md", "2. Hubs/failing.md", "3. Resources/last.md"]);
+  assert.deepEqual(failures, [["2. Hubs/failing.md", failure]]);
 });

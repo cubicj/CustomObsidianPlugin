@@ -2,7 +2,7 @@ import { Prec } from "@codemirror/state";
 import type { Extension } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 import type { EditorView } from "@codemirror/view";
-import { isHeadingLine, scanRegions } from "./note-format-utils";
+import { isHeadingLine, isNormalRegionLine } from "./note-format-utils";
 import type { NoteFormatSettings } from "./note-format-utils";
 
 export function createHeadingEnterExtension(getSettings: () => NoteFormatSettings): Extension {
@@ -37,9 +37,6 @@ function handleEnter(view: EditorView, settings: NoteFormatSettings): boolean {
 }
 
 function isSkippedRegion(view: EditorView, lineNumber: number): boolean {
-  const lines: string[] = [];
-  for (const text of view.state.doc.iterLines(1, lineNumber + 1)) {
-    lines.push(text);
-  }
-  return scanRegions(lines)[lineNumber - 1] !== "normal";
+  const lines = Array.from(view.state.doc.iterLines());
+  return !isNormalRegionLine(lines, lineNumber - 1);
 }

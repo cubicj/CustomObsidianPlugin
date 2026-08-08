@@ -90,6 +90,20 @@ export function shouldDeferModifiedWrite(filePath: string, openPaths: ReadonlySe
   return openPaths.has(filePath);
 }
 
+export async function processDeferredModifiedWrites(
+  writes: readonly PendingModifiedWrite[],
+  processWrite: (write: PendingModifiedWrite) => Promise<void>,
+  handleError: (write: PendingModifiedWrite, error: unknown) => void,
+): Promise<void> {
+  for (const write of writes) {
+    try {
+      await processWrite(write);
+    } catch (error) {
+      handleError(write, error);
+    }
+  }
+}
+
 export class DeferredModifiedWriteQueue {
   private pending = new Map<string, PendingModifiedWrite>();
 

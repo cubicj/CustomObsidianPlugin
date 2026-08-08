@@ -4,6 +4,7 @@ const HEADING_PATTERN = /^#{1,6}[ \t]+\S/;
 const BLANK_PATTERN = /^[ \t\r]*$/;
 const LIST_ITEM_PATTERN = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/;
 const FRONTMATTER_DELIMITER_PATTERN = /^---[ \t\r]*$/;
+const FRONTMATTER_CLOSING_DELIMITER_PATTERN = /^(?:---|\.\.\.)[ \t\r]*$/;
 const FENCE_PATTERN = /^[ \t]*(`{3,}|~{3,})(.*)$/;
 
 export function isHeadingLine(line: string): boolean {
@@ -19,7 +20,7 @@ export function scanRegions(lines: string[]): LineRegion[] {
   let bodyStart = 0;
   if (lines.length > 0 && FRONTMATTER_DELIMITER_PATTERN.test(lines[0])) {
     for (let index = 1; index < lines.length; index++) {
-      if (!FRONTMATTER_DELIMITER_PATTERN.test(lines[index])) continue;
+      if (!FRONTMATTER_CLOSING_DELIMITER_PATTERN.test(lines[index])) continue;
       for (let inner = 0; inner <= index; inner++) {
         regions[inner] = "frontmatter";
       }
@@ -48,6 +49,10 @@ export function scanRegions(lines: string[]): LineRegion[] {
   return regions;
 }
 
+export function isNormalRegionLine(lines: string[], lineIndex: number): boolean {
+  return scanRegions(lines)[lineIndex] === "normal";
+}
+
 export interface NoteFormatSettings {
   normalizeTrailingNewline: boolean;
   blankLinesAroundHeadings: boolean;
@@ -66,13 +71,15 @@ export const DEFAULT_NOTE_FORMAT_SETTINGS: NoteFormatSettings = {
 
 export function formatNoteContent(content: string, settings: NoteFormatSettings): string | null {
   if (content.length === 0) return null;
+  const lineEnding = content.match(/\r\n|\n/)?.[0] ?? "\n";
+  const insertedBlankLine = lineEnding === "\r\n" ? "\r" : "";
   let lines = content.split("\n");
   if (settings.collapseBlankLines) lines = collapseBlankRuns(lines);
-  if (settings.blankLineAfterList) lines = padTextAfterLists(lines);
-  if (settings.blankLinesAroundHeadings) lines = padHeadings(lines);
+  if (settings.blankLineAfterList) lines = padTextAfterLists(lines, insertedBlankLine);
+  if (settings.blankLinesAroundHeadings) lines = padHeadings(lines, insertedBlankLine);
   let next = lines.join("\n");
   if (settings.normalizeTrailingNewline) {
-    next = `${next.replace(/(\n[ \t\r]*)+$/, "")}\n`;
+    next = `${next.replace(/(?:(?:\r\n|\n)[ \t]*)+$/, "")}${lineEnding}`;
   }
   return next === content ? null : next;
 }
@@ -94,7 +101,7 @@ function collapseBlankRuns(lines: string[]): string[] {
   return output;
 }
 
-function padTextAfterLists(lines: string[]): string[] {
+function padTextAfterLists(lines: string[], insertedBlankLine: string): string[] {
   const regions = scanRegions(lines);
   const output: string[] = [];
   for (let index = 0; index < lines.length; index++) {
@@ -113,13 +120,13 @@ function padTextAfterLists(lines: string[]): string[] {
       !nextLine.startsWith(">") &&
       !nextLine.startsWith("|")
     ) {
-      output.push("");
+      output.push(insertedBlankLine);
     }
   }
   return output;
 }
 
-function padHeadings(lines: string[]): string[] {
+function padHeadings(lines: string[], insertedBlankLine: string): string[] {
   const regions = scanRegions(lines);
   const bodyStart = findBodyStart(regions);
   const output: string[] = [];
@@ -130,11 +137,11 @@ function padHeadings(lines: string[]): string[] {
       continue;
     }
     if (index > bodyStart && output.length > 0 && !isBlankLine(output[output.length - 1])) {
-      output.push("");
+      output.push(insertedBlankLine);
     }
     output.push(line);
     if (index + 1 < lines.length && !isBlankLine(lines[index + 1])) {
-      output.push("");
+      output.push(insertedBlankLine);
     }
   }
   return output;
