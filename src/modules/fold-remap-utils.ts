@@ -17,6 +17,8 @@ export type RemapOutcome =
   | { action: "write"; value: Record<string, unknown> }
   | { action: "delete" };
 
+export type FoldReapplyDecision = "apply" | "retry" | "exhausted";
+
 interface FoldRangeLike {
   from: number;
   to: number;
@@ -130,6 +132,96 @@ function isHeadingSignature(value: unknown): value is HeadingSignature {
     typeof signature.occurrence === "number" &&
     Number.isFinite(signature.occurrence)
   );
+}
+
+function documentLineValidatesSignature(
+  line: string | undefined,
+  signature: HeadingSignature,
+): boolean {
+  if (
+    line === undefined ||
+    !Number.isInteger(signature.level) ||
+    signature.level < 1
+  ) {
+    return false;
+  }
+  const marker = "#".repeat(signature.level);
+  return line.startsWith(marker) && /^[ \t]+\S/.test(line.slice(marker.length));
+}
+
+export function enrichSignatures(
+  folds: unknown,
+  headings: CurrentHeading[],
+  documentLines: string[] | null,
+  priorSignatures: unknown,
+): HeadingSignature[] {
+  if (!Array.isArray(folds)) {
+    return [];
+  }
+  const cacheByFrom = new Map<number, HeadingSignature>();
+  for (const signature of buildHeadingSignatures(folds, headings)) {
+    if (!cacheByFrom.has(signature.from)) {
+      cacheByFrom.set(signature.from, signature);
+    }
+  }
+  const priorByFrom = new Map<number, HeadingSignature>();
+  if (Array.isArray(priorSignatures)) {
+    for (const value of priorSignatures) {
+      if (isHeadingSignature(value) && !priorByFrom.has(value.from)) {
+        priorByFrom.set(value.from, value);
+      }
+    }
+  }
+  const signatures: HeadingSignature[] = [];
+  for (const value of folds) {
+    if (!isFoldRange(value)) {
+      continue;
+    }
+    const cached = cacheByFrom.get(value.from);
+    if (
+      cached &&
+      (documentLines === null ||
+        documentLineValidatesSignature(documentLines[value.from], cached))
+    ) {
+      signatures.push(cached);
+      continue;
+    }
+    const prior = priorByFrom.get(value.from);
+    if (prior) {
+      signatures.push(prior);
+    }
+  }
+  return signatures;
+}
+
+export function hasPropertiesFoldMarker(
+  folds: unknown,
+  signatures: unknown,
+): boolean {
+  if (!Array.isArray(folds)) {
+    return false;
+  }
+  const hasLineZeroSignature =
+    Array.isArray(signatures) &&
+    signatures.some(
+      (signature) => isHeadingSignature(signature) && signature.from === 0,
+    );
+  return (
+    !hasLineZeroSignature &&
+    folds.some((fold) => isFoldRange(fold) && isPropertiesMarker(fold))
+  );
+}
+
+export function decideFoldReapply(
+  viewData: string,
+  targetData: string,
+  attempt: number,
+  maxAttempts: number,
+): FoldReapplyDecision {
+  if (viewData === targetData) {
+    return "apply";
+  }
+  return attempt >= maxAttempts ? "exhausted" : "retry";
 }
 
 function headingKey(level: number, text: string): string {

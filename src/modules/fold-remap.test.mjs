@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import {
   buildHeadingSignatures,
   collectCurrentHeadings,
+  decideFoldReapply,
+  enrichSignatures,
+  hasPropertiesFoldMarker,
   remapFoldEntry,
 } from "./fold-remap-utils.ts";
 
@@ -63,6 +66,100 @@ test("buildHeadingSignatures signs a heading folded at line zero", () => {
     ),
     [{ from: 0, level: 1, text: "Alpha", occurrence: 0 }],
   );
+});
+
+test("enrichSignatures signs from a cache heading validated by the document", () => {
+  assert.deepEqual(
+    enrichSignatures(
+      [{ from: 2, to: 5 }],
+      [{ line: 2, level: 2, text: "Current" }],
+      ["before", "", "##\tCurrent"],
+      [{ from: 2, level: 1, text: "Prior", occurrence: 3 }],
+    ),
+    [{ from: 2, level: 2, text: "Current", occurrence: 0 }],
+  );
+});
+
+test("enrichSignatures carries a prior signature when cache validation fails", () => {
+  const prior = { from: 2, level: 1, text: "Prior", occurrence: 3 };
+  assert.deepEqual(
+    enrichSignatures(
+      [{ from: 2, to: 5 }],
+      [{ line: 2, level: 2, text: "Stale" }],
+      ["before", "", "# Current"],
+      [prior],
+    ),
+    [prior],
+  );
+});
+
+test("enrichSignatures leaves a fold unsigned when neither source is valid", () => {
+  assert.deepEqual(
+    enrichSignatures(
+      [{ from: 2, to: 5 }],
+      [{ line: 2, level: 2, text: "Stale" }],
+      ["before", "", "##   "],
+      [],
+    ),
+    [],
+  );
+});
+
+test("enrichSignatures leaves a properties marker unsigned", () => {
+  assert.deepEqual(
+    enrichSignatures(
+      [
+        { from: 0, to: 0 },
+        { from: 2, to: 5 },
+      ],
+      [{ line: 2, level: 1, text: "Alpha" }],
+      ["---", "", "# Alpha"],
+      [],
+    ),
+    [{ from: 2, level: 1, text: "Alpha", occurrence: 0 }],
+  );
+});
+
+test("enrichSignatures signs a validated line-zero heading fold", () => {
+  assert.deepEqual(
+    enrichSignatures(
+      [{ from: 0, to: 0 }],
+      [{ line: 0, level: 1, text: "Alpha" }],
+      ["# Alpha"],
+      [],
+    ),
+    [{ from: 0, level: 1, text: "Alpha", occurrence: 0 }],
+  );
+});
+
+test("enrichSignatures keeps cache-only behavior without open document text", () => {
+  assert.deepEqual(
+    enrichSignatures(
+      [{ from: 2, to: 5 }],
+      [{ line: 2, level: 2, text: "Cached" }],
+      null,
+      [],
+    ),
+    [{ from: 2, level: 2, text: "Cached", occurrence: 0 }],
+  );
+});
+
+test("hasPropertiesFoldMarker discriminates a marker from a line-zero heading", () => {
+  const folds = [{ from: 0, to: 0 }];
+  assert.equal(hasPropertiesFoldMarker(folds, []), true);
+  assert.equal(
+    hasPropertiesFoldMarker(folds, [
+      { from: 0, level: 1, text: "Alpha", occurrence: 0 },
+    ]),
+    false,
+  );
+  assert.equal(hasPropertiesFoldMarker([{ from: 0, to: 2 }], []), false);
+});
+
+test("decideFoldReapply waits for the target revision within the attempt bound", () => {
+  assert.equal(decideFoldReapply("old", "target", 1, 10), "retry");
+  assert.equal(decideFoldReapply("target", "target", 10, 10), "apply");
+  assert.equal(decideFoldReapply("old", "target", 10, 10), "exhausted");
 });
 
 test("remapFoldEntry leaves valid entries alone", () => {
