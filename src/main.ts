@@ -43,6 +43,11 @@ import {
 } from "./modules/reading-brackets";
 import type { ReadingBracketsSettings } from "./modules/reading-brackets";
 import { ReadingListBlankLinesManager } from "./modules/reading-list-blank-lines";
+import {
+  createNoAltMultiCursorExtension,
+  DEFAULT_NO_ALT_MULTI_CURSOR_SETTINGS,
+} from "./modules/no-alt-multi-cursor";
+import type { NoAltMultiCursorSettings } from "./modules/no-alt-multi-cursor";
 import { CubicJCoreSettingTab } from "./settings-tab";
 
 interface CubicJCoreSettings {
@@ -56,6 +61,7 @@ interface CubicJCoreSettings {
   readingFolds: ReadingFoldsSettings;
   foldRemap: FoldRemapSettings;
   readingBrackets: ReadingBracketsSettings;
+  noAltMultiCursor: NoAltMultiCursorSettings;
 }
 
 const DEFAULT_SETTINGS: CubicJCoreSettings = {
@@ -69,6 +75,7 @@ const DEFAULT_SETTINGS: CubicJCoreSettings = {
   readingFolds: DEFAULT_READING_FOLDS_SETTINGS,
   foldRemap: DEFAULT_FOLD_REMAP_SETTINGS,
   readingBrackets: DEFAULT_READING_BRACKETS_SETTINGS,
+  noAltMultiCursor: DEFAULT_NO_ALT_MULTI_CURSOR_SETTINGS,
 };
 
 export default class CubicJCorePlugin extends Plugin {
@@ -122,6 +129,9 @@ export default class CubicJCorePlugin extends Plugin {
 
     this.registerEditorExtension(createHeadingEnterExtension(() => this.settings.noteFormat));
     this.registerEditorExtension(createEagerParseExtension(() => this.settings.eagerParse));
+    this.registerEditorExtension(
+      createNoAltMultiCursorExtension(() => this.settings.noAltMultiCursor),
+    );
     this.addSettingTab(new CubicJCoreSettingTab(this.app, this));
     console.log("CubicJ Core loaded");
   }
