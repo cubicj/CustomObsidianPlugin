@@ -7,6 +7,7 @@ import {
   enrichSignatures,
   hasPropertiesFoldMarker,
   remapFoldEntry,
+  shouldReapplyFoldEntry,
 } from "./fold-remap-utils.ts";
 
 function cacheHeading(line, level, text) {
@@ -160,6 +161,150 @@ test("decideFoldReapply waits for the target revision within the attempt bound",
   assert.equal(decideFoldReapply("old", "target", 1, 10), "retry");
   assert.equal(decideFoldReapply("target", "target", 10, 10), "apply");
   assert.equal(decideFoldReapply("old", "target", 10, 10), "exhausted");
+});
+
+test("shouldReapplyFoldEntry skips identical live folds", () => {
+  const folds = [
+    { from: 2, to: 5 },
+    { from: 8, to: 12 },
+  ];
+  assert.equal(
+    shouldReapplyFoldEntry({ folds, lines: 20 }, { folds, lines: 20 }),
+    false,
+  );
+});
+
+test("shouldReapplyFoldEntry applies when an entry fold is missing live", () => {
+  assert.equal(
+    shouldReapplyFoldEntry(
+      { folds: [{ from: 2, to: 5 }], lines: 20 },
+      {
+        folds: [
+          { from: 2, to: 5 },
+          { from: 8, to: 12 },
+        ],
+        lines: 20,
+      },
+    ),
+    true,
+  );
+});
+
+test("shouldReapplyFoldEntry skips when live folds are a superset", () => {
+  assert.equal(
+    shouldReapplyFoldEntry(
+      {
+        folds: [
+          { from: 2, to: 5 },
+          { from: 8, to: 12 },
+        ],
+        lines: 20,
+      },
+      { folds: [{ from: 2, to: 5 }], lines: 20 },
+    ),
+    false,
+  );
+});
+
+test("shouldReapplyFoldEntry compares folds by start line only", () => {
+  assert.equal(
+    shouldReapplyFoldEntry(
+      {
+        folds: [
+          { from: 2, to: 7 },
+          { from: 8, to: 14 },
+        ],
+        lines: 20,
+      },
+      {
+        folds: [
+          { from: 2, to: 2 },
+          { from: 8, to: 8 },
+        ],
+        lines: 20,
+      },
+    ),
+    false,
+  );
+});
+
+test("shouldReapplyFoldEntry excludes the properties sentinel", () => {
+  assert.equal(
+    shouldReapplyFoldEntry(
+      { folds: [{ from: 4, to: 9 }], lines: 20 },
+      {
+        folds: [
+          { from: 0, to: 0 },
+          { from: 4, to: 4 },
+        ],
+        lines: 20,
+        cubicjHeadings: [
+          { from: 4, level: 1, text: "Alpha", occurrence: 0 },
+        ],
+      },
+    ),
+    false,
+  );
+  assert.equal(
+    shouldReapplyFoldEntry(
+      { folds: [], lines: 20 },
+      { folds: [{ from: 0, to: 0 }], lines: 20, cubicjHeadings: [] },
+    ),
+    false,
+  );
+});
+
+test("shouldReapplyFoldEntry keeps a signed line-zero heading required", () => {
+  assert.equal(
+    shouldReapplyFoldEntry(
+      { folds: [{ from: 4, to: 9 }], lines: 20 },
+      {
+        folds: [
+          { from: 0, to: 0 },
+          { from: 4, to: 4 },
+        ],
+        lines: 20,
+        cubicjHeadings: [
+          { from: 0, level: 1, text: "Alpha", occurrence: 0 },
+          { from: 4, level: 1, text: "Beta", occurrence: 0 },
+        ],
+      },
+    ),
+    true,
+  );
+});
+
+test("shouldReapplyFoldEntry skips entries with a stale line count", () => {
+  assert.equal(
+    shouldReapplyFoldEntry(
+      { folds: [], lines: 21 },
+      { folds: [{ from: 2, to: 5 }], lines: 20 },
+    ),
+    false,
+  );
+});
+
+test("shouldReapplyFoldEntry fails open for malformed live fold info", () => {
+  const entry = { folds: [{ from: 2, to: 5 }], lines: 20 };
+  assert.equal(shouldReapplyFoldEntry(null, entry), true);
+  assert.equal(
+    shouldReapplyFoldEntry({ folds: "invalid", lines: 20 }, entry),
+    true,
+  );
+  assert.equal(
+    shouldReapplyFoldEntry({ folds: [], lines: "20" }, entry),
+    true,
+  );
+});
+
+test("shouldReapplyFoldEntry fails open for malformed entry folds", () => {
+  assert.equal(
+    shouldReapplyFoldEntry(
+      { folds: [{ from: 2, to: 5 }], lines: 20 },
+      { folds: "invalid", lines: 20 },
+    ),
+    true,
+  );
 });
 
 test("remapFoldEntry leaves valid entries alone", () => {

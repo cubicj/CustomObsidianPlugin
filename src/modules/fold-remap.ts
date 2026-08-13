@@ -6,6 +6,7 @@ import {
   enrichSignatures,
   hasPropertiesFoldMarker,
   remapFoldEntry,
+  shouldReapplyFoldEntry,
 } from "./fold-remap-utils";
 import type { RemapOutcome } from "./fold-remap-utils";
 import { countLines } from "./reading-folds-utils";
@@ -27,6 +28,7 @@ interface AppLike extends AppWithFoldManager {
 
 interface FoldModeLike {
   applyFoldInfo?: (info: unknown) => unknown;
+  getFoldInfo?: () => unknown;
 }
 
 interface FoldViewLike {
@@ -406,7 +408,12 @@ export class FoldRemapManager {
     const viewLike = view as unknown as FoldViewLike;
     const mode = viewLike.currentMode;
     if (mode && typeof mode.applyFoldInfo === "function") {
-      mode.applyFoldInfo(entry);
+      if (
+        typeof mode.getFoldInfo !== "function" ||
+        shouldReapplyFoldEntry(mode.getFoldInfo(), entry)
+      ) {
+        mode.applyFoldInfo(entry);
+      }
     }
     const metadataEditor = viewLike.metadataEditor;
     if (

@@ -72,6 +72,15 @@ function isPropertiesMarker(fold: FoldRangeLike): boolean {
   return fold.from === 0 && fold.to === 0;
 }
 
+function hasLineZeroHeadingSignature(signatures: unknown): boolean {
+  return (
+    Array.isArray(signatures) &&
+    signatures.some(
+      (signature) => isHeadingSignature(signature) && signature.from === 0,
+    )
+  );
+}
+
 export function buildHeadingSignatures(
   folds: unknown,
   headings: CurrentHeading[],
@@ -201,15 +210,52 @@ export function hasPropertiesFoldMarker(
   if (!Array.isArray(folds)) {
     return false;
   }
-  const hasLineZeroSignature =
-    Array.isArray(signatures) &&
-    signatures.some(
-      (signature) => isHeadingSignature(signature) && signature.from === 0,
-    );
   return (
-    !hasLineZeroSignature &&
+    !hasLineZeroHeadingSignature(signatures) &&
     folds.some((fold) => isFoldRange(fold) && isPropertiesMarker(fold))
   );
+}
+
+export function shouldReapplyFoldEntry(
+  liveInfo: unknown,
+  entry: Record<string, unknown>,
+): boolean {
+  if (typeof liveInfo !== "object" || liveInfo === null) {
+    return true;
+  }
+  const live = liveInfo as { folds?: unknown; lines?: unknown };
+  if (
+    !Array.isArray(live.folds) ||
+    typeof live.lines !== "number" ||
+    !Number.isFinite(live.lines) ||
+    !Array.isArray(entry.folds) ||
+    typeof entry.lines !== "number" ||
+    !Number.isFinite(entry.lines)
+  ) {
+    return true;
+  }
+  if (entry.lines !== live.lines) {
+    return false;
+  }
+  const liveStarts = new Set<number>();
+  for (const fold of live.folds) {
+    if (isFoldRange(fold)) {
+      liveStarts.add(fold.from);
+    }
+  }
+  const lineZeroIsHeading = hasLineZeroHeadingSignature(entry.cubicjHeadings);
+  for (const fold of entry.folds) {
+    if (!isFoldRange(fold)) {
+      continue;
+    }
+    if (isPropertiesMarker(fold) && !lineZeroIsHeading) {
+      continue;
+    }
+    if (!liveStarts.has(fold.from)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function decideFoldReapply(
