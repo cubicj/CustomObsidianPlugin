@@ -11,10 +11,7 @@
     "watch": "node esbuild.config.mjs watch",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test && npm run build",
-    "copy:windows": "node esbuild.config.mjs copy:windows",
-    "deploy:windows": "npm run build && npm run copy:windows",
-    "dev:windows": "node esbuild.config.mjs watch:windows"
+    "check": "npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@codemirror/language": "^6.11.0",
