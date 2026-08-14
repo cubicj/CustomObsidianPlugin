@@ -4,7 +4,7 @@ import {
   isReadingBracketBoundaryTag,
   isReadingBracketExcludedElement,
   planReadingBracketDecorations,
-} from "./reading-brackets-utils.ts";
+} from "../src/modules/reading-brackets-utils.ts";
 
 function decoratedParts(fragments) {
   return planReadingBracketDecorations(fragments).map((decoration) => ({

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { injectPropertiesFold } from "./fold-properties-utils.ts";
+import { injectPropertiesFold } from "../src/modules/fold-properties-utils.ts";
 
 test("builds minimal fold info for null input", () => {
   assert.deepEqual(injectPropertiesFold(null), { folds: [{ from: 0, to: 0 }] });

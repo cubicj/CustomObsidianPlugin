@@ -9,7 +9,7 @@ import {
   shouldDeferModifiedWrite,
   shouldManagePath,
   splitPathList,
-} from "./frontmatter-date-utils.ts";
+} from "../src/modules/frontmatter-date-utils.ts";
 
 test("formats timestamps with an explicit KST offset", () => {
   assert.equal(formatKstTimestamp(Date.UTC(2026, 5, 27, 8, 45, 0)), "2026-06-27T17:45:00+09:00");

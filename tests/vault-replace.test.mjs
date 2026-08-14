@@ -9,7 +9,7 @@ import {
   findMatches,
   resolveReplaceSnapshot,
   scanMatchingFiles,
-} from "./vault-replace-utils.ts";
+} from "../src/modules/vault-replace-utils.ts";
 
 function compile(query, options = {}) {
   const result = buildMatcher(query, {

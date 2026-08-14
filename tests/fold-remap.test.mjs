@@ -8,7 +8,7 @@ import {
   hasPropertiesFoldMarker,
   remapFoldEntry,
   shouldReapplyFoldEntry,
-} from "./fold-remap-utils.ts";
+} from "../src/modules/fold-remap-utils.ts";
 
 function cacheHeading(line, level, text) {
   return { heading: text, level, position: { start: { line }, end: { line } } };

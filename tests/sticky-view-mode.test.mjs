@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decideStickyViewMode } from "./sticky-view-mode-utils.ts";
+import { decideStickyViewMode } from "../src/modules/sticky-view-mode-utils.ts";
 
 const sticky = { mode: "preview", source: false };
 

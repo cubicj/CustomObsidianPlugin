@@ -4,7 +4,7 @@ import {
   collectHeadingFoldLines,
   countLines,
   isHeadingSectionHtml,
-} from "./reading-folds-utils.ts";
+} from "../src/modules/reading-folds-utils.ts";
 
 test("counts one line for empty text", () => {
   assert.equal(countLines(""), 1);

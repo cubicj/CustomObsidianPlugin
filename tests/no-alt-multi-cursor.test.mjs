@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decideClickAddsSelectionRange } from "./no-alt-multi-cursor-utils.ts";
+import { decideClickAddsSelectionRange } from "../src/modules/no-alt-multi-cursor-utils.ts";
 
 test("never adds a selection range while enabled", () => {
   assert.equal(

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { clampParseTarget, decideEagerParse } from "./eager-parse-utils.ts";
+import { clampParseTarget, decideEagerParse } from "../src/modules/eager-parse-utils.ts";
 
 test("skips when disabled or when the syntax tree is available", () => {
   assert.equal(

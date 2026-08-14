@@ -7,7 +7,7 @@ import {
   isReadingListMarkerLine,
   parseReadingListDataLine,
   resolveReadingListSourceLine,
-} from "./reading-list-blank-lines-utils.ts";
+} from "../src/modules/reading-list-blank-lines-utils.ts";
 
 function sourceLines(source) {
   return source.split("\n");

@@ -7,7 +7,7 @@ import {
   isHeadingLine,
   isNormalRegionLine,
   scanRegions,
-} from "./note-format-utils.ts";
+} from "../src/modules/note-format-utils.ts";
 
 test("isHeadingLine accepts ATX headings with text", () => {
   assert.equal(isHeadingLine("# Title"), true);
