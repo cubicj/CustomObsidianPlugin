@@ -48,6 +48,11 @@ import {
   DEFAULT_NO_ALT_MULTI_CURSOR_SETTINGS,
 } from "./modules/no-alt-multi-cursor";
 import type { NoAltMultiCursorSettings } from "./modules/no-alt-multi-cursor";
+import {
+  DEFAULT_SIDEBAR_COMMANDS_SETTINGS,
+  SidebarCommandsManager,
+} from "./modules/sidebar-commands";
+import type { SidebarCommandsSettings } from "./modules/sidebar-commands";
 import { CubicJCoreSettingTab } from "./settings-tab";
 
 interface CubicJCoreSettings {
@@ -62,6 +67,7 @@ interface CubicJCoreSettings {
   foldRemap: FoldRemapSettings;
   readingBrackets: ReadingBracketsSettings;
   noAltMultiCursor: NoAltMultiCursorSettings;
+  sidebarCommands: SidebarCommandsSettings;
 }
 
 const DEFAULT_SETTINGS: CubicJCoreSettings = {
@@ -76,6 +82,7 @@ const DEFAULT_SETTINGS: CubicJCoreSettings = {
   foldRemap: DEFAULT_FOLD_REMAP_SETTINGS,
   readingBrackets: DEFAULT_READING_BRACKETS_SETTINGS,
   noAltMultiCursor: DEFAULT_NO_ALT_MULTI_CURSOR_SETTINGS,
+  sidebarCommands: DEFAULT_SIDEBAR_COMMANDS_SETTINGS,
 };
 
 export default class CubicJCorePlugin extends Plugin {
@@ -89,6 +96,7 @@ export default class CubicJCorePlugin extends Plugin {
   foldRemap!: FoldRemapManager;
   readingBrackets!: ReadingBracketsManager;
   readingListBlankLines!: ReadingListBlankLinesManager;
+  sidebarCommands!: SidebarCommandsManager;
 
   async onload() {
     await this.loadSettings();
@@ -126,6 +134,9 @@ export default class CubicJCorePlugin extends Plugin {
 
     this.readingListBlankLines = new ReadingListBlankLinesManager(this);
     this.readingListBlankLines.register();
+
+    this.sidebarCommands = new SidebarCommandsManager(this, () => this.settings.sidebarCommands);
+    this.sidebarCommands.register();
 
     this.registerEditorExtension(createHeadingEnterExtension(() => this.settings.noteFormat));
     this.registerEditorExtension(createEagerParseExtension(() => this.settings.eagerParse));
