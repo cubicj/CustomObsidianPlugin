@@ -123,8 +123,7 @@ export class FontLoader {
 
   private applyCssRules(fileName: string) {
     const fontFamily = this.getFontFileParts(fileName).baseName;
-    const css = getDefaultCss(fontFamily) + `\n* { font-family: '${fontFamily}' !important; }\n`;
-    applyCss(css, FONT_GENERAL_ID);
+    applyCss(getDefaultCss(fontFamily), FONT_GENERAL_ID);
   }
 
   private async convertFontToCss(fileName: string, fontFolder: string, cssCachePath: string) {
