@@ -14,15 +14,18 @@ export const DEFAULT_READING_BRACKETS_SETTINGS: ReadingBracketsSettings = {
   enabled: true,
 };
 
-const READING_BRACKETS_STYLE_ID = "cubicj-reading-brackets";
-const READING_BRACKETS_STYLES = `
-.cubicj-bracket-glyph {
-  color: var(--text-faint);
+interface ObsidianWindow extends Window {
+  createFragment(): DocumentFragment;
+  createSpan(options?: DomElementInfo | string): HTMLSpanElement;
 }
-.cubicj-bracket-label {
-  color: var(--link-external-color);
+
+interface ObsidianDocument extends Document {
+  win: ObsidianWindow;
 }
-`;
+
+function getObsidianWindow(document: Document): ObsidianWindow {
+  return (document as ObsidianDocument).win;
+}
 
 function collectTextRuns(root: HTMLElement): Text[][] {
   const runs: Text[][] = [];
@@ -79,7 +82,8 @@ function buildReplacement(
   source: string,
   decorations: readonly ReadingBracketDecoration[],
 ): DocumentFragment {
-  const replacement = document.createDocumentFragment();
+  const ownerWindow = getObsidianWindow(document);
+  const replacement = ownerWindow.createFragment();
   let cursor = 0;
   let activeMarker = -1;
   let wrapper: HTMLSpanElement | null = null;
@@ -92,16 +96,18 @@ function buildReplacement(
       wrapper = null;
     }
     if (wrapper === null || activeMarker !== decoration.markerIndex) {
-      wrapper = document.createElement("span");
-      wrapper.className = "cubicj-bracket-marker";
+      wrapper = ownerWindow.createSpan({ cls: "cubicj-bracket-marker" });
       replacement.append(wrapper);
       activeMarker = decoration.markerIndex;
     }
 
-    const segment = document.createElement("span");
-    segment.className =
-      decoration.kind === "glyph" ? "cubicj-bracket-glyph" : "cubicj-bracket-label";
-    segment.textContent = source.slice(decoration.start, decoration.end);
+    const segment = ownerWindow.createSpan({
+      cls:
+        decoration.kind === "glyph"
+          ? "cubicj-bracket-glyph"
+          : "cubicj-bracket-label",
+      text: source.slice(decoration.start, decoration.end),
+    });
     wrapper.append(segment);
     cursor = decoration.end;
 
@@ -145,50 +151,19 @@ function decorateRun(run: readonly Text[]): void {
 }
 
 export class ReadingBracketsManager {
-  private readonly styles = new Map<Document, HTMLStyleElement>();
-
   constructor(
     private plugin: Plugin,
     private getSettings: () => ReadingBracketsSettings,
   ) {}
 
   register(): void {
-    this.plugin.register(() => this.removeStyles());
-    if (this.getSettings().enabled) {
-      this.ensureStyles(document);
-    } else {
-      document.getElementById(READING_BRACKETS_STYLE_ID)?.remove();
-    }
     this.plugin.registerMarkdownPostProcessor((element) => {
       if (!this.getSettings().enabled) {
-        this.removeStyles();
         return;
       }
-      this.ensureStyles(element.ownerDocument);
       for (const run of collectTextRuns(element)) {
         decorateRun(run);
       }
     });
-  }
-
-  private ensureStyles(ownerDocument: Document): void {
-    const tracked = this.styles.get(ownerDocument);
-    if (tracked !== undefined && tracked.parentNode !== null) {
-      return;
-    }
-    this.styles.delete(ownerDocument);
-    ownerDocument.getElementById(READING_BRACKETS_STYLE_ID)?.remove();
-    const style = ownerDocument.createElement("style");
-    style.id = READING_BRACKETS_STYLE_ID;
-    style.textContent = READING_BRACKETS_STYLES;
-    ownerDocument.head.appendChild(style);
-    this.styles.set(ownerDocument, style);
-  }
-
-  private removeStyles(): void {
-    for (const style of this.styles.values()) {
-      style.remove();
-    }
-    this.styles.clear();
   }
 }

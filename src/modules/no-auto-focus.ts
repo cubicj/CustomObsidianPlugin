@@ -15,8 +15,10 @@ interface MarkdownViewLike {
 let originalSetEphemeralState: SetEphemeralState | null = null;
 let patchedSetEphemeralState: SetEphemeralState | null = null;
 let pendingBlurFrame: number | null = null;
+let pendingBlurWindow: Window | null = null;
 
 export function enableNoAutoFocus() {
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- The prototype method is invoked with each live view as its receiver.
   const setEphemeralState = MarkdownView.prototype.setEphemeralState;
   if (typeof setEphemeralState !== "function") {
     return;
@@ -28,13 +30,17 @@ export function enableNoAutoFocus() {
       ...(state as Record<PropertyKey, unknown>),
       focus: false,
     });
-    if (pendingBlurFrame !== null) {
-      cancelAnimationFrame(pendingBlurFrame);
+    if (pendingBlurFrame !== null && pendingBlurWindow !== null) {
+      pendingBlurWindow.cancelAnimationFrame(pendingBlurFrame);
       pendingBlurFrame = null;
+      pendingBlurWindow = null;
     }
     if (target) {
-      pendingBlurFrame = requestAnimationFrame(() => {
+      const ownerWindow = target.ownerDocument.defaultView ?? window;
+      pendingBlurWindow = ownerWindow;
+      pendingBlurFrame = ownerWindow.requestAnimationFrame(() => {
         pendingBlurFrame = null;
+        pendingBlurWindow = null;
         if (target.ownerDocument.activeElement === target) {
           target.blur();
         }
@@ -46,9 +52,10 @@ export function enableNoAutoFocus() {
 }
 
 export function disableNoAutoFocus() {
-  if (pendingBlurFrame !== null) {
-    cancelAnimationFrame(pendingBlurFrame);
+  if (pendingBlurFrame !== null && pendingBlurWindow !== null) {
+    pendingBlurWindow.cancelAnimationFrame(pendingBlurFrame);
     pendingBlurFrame = null;
+    pendingBlurWindow = null;
   }
   if (
     originalSetEphemeralState &&

@@ -26,10 +26,11 @@ export class FoldPropertiesManager {
     }
     const originalLoad = foldManager.load;
     this.originalLoad = originalLoad;
-    const manager = this;
+    const getSettings = this.getSettings;
+    const hasFrontmatter = (file: TFile): boolean => this.hasFrontmatter(file);
     const patchedLoad: FoldManagerLoad = function (file: TFile | null) {
       const info = originalLoad.call(foldManager, file);
-      if (!manager.getSettings().enabled || !file || !manager.hasFrontmatter(file)) {
+      if (!getSettings().enabled || !file || !hasFrontmatter(file)) {
         return info;
       }
       return injectPropertiesFold(info);

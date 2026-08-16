@@ -20,6 +20,7 @@ export function createEagerParseExtension(
   return ViewPlugin.fromClass(
     class {
       private animationFrame: number | null = null;
+      private animationWindow: Window | null = null;
 
       constructor(private readonly view: EditorView) {
         this.schedule();
@@ -32,9 +33,10 @@ export function createEagerParseExtension(
       }
 
       destroy(): void {
-        if (this.animationFrame !== null) {
-          cancelAnimationFrame(this.animationFrame);
+        if (this.animationFrame !== null && this.animationWindow !== null) {
+          this.animationWindow.cancelAnimationFrame(this.animationFrame);
           this.animationFrame = null;
+          this.animationWindow = null;
         }
       }
 
@@ -42,8 +44,11 @@ export function createEagerParseExtension(
         if (this.animationFrame !== null) {
           return;
         }
-        this.animationFrame = requestAnimationFrame(() => {
+        const animationWindow = this.view.dom.ownerDocument.defaultView ?? window;
+        this.animationWindow = animationWindow;
+        this.animationFrame = animationWindow.requestAnimationFrame(() => {
           this.animationFrame = null;
+          this.animationWindow = null;
           this.catchUp();
         });
       }
@@ -67,7 +72,8 @@ export function createEagerParseExtension(
           if (!forceParsing(this.view, target, BUDGET_MS)) {
             this.schedule();
           }
-        } catch {
+        } catch (error) {
+          void error;
         }
       }
     },

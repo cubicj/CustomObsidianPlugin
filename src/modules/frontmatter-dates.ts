@@ -217,7 +217,7 @@ export class FrontmatterDateManager {
   private async processFile(file: TFile, options: DateFrontmatterOptions): Promise<boolean> {
     let changed = false;
     try {
-      await this.plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
+      await this.plugin.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
         changed = applyDateFrontmatter(frontmatter, this.getSettings(), options);
       });
       return changed;
@@ -272,7 +272,7 @@ async function processOwnedModifiedWrite(
   write: PendingModifiedWrite,
 ): Promise<void> {
   try {
-    await owner.app.fileManager.processFrontMatter(file, (frontmatter) => {
+    await owner.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
       applyDateFrontmatter(frontmatter, owner.dateSettings, {
         createdMs: write.createdMs,
         modifiedMs: write.modifiedMs,

@@ -1,9 +1,5 @@
 import { Plugin, TFile } from "obsidian";
-import {
-  VAULT_REPLACE_STYLE_ID,
-  VAULT_REPLACE_STYLES,
-  VaultReplaceModal,
-} from "./vault-replace-modal";
+import { VaultReplaceModal } from "./vault-replace-modal";
 import { applyReplace, findMatches, scanMatchingFiles } from "./vault-replace-utils";
 import type { ScannedFileMatches } from "./vault-replace-utils";
 
@@ -39,7 +35,6 @@ export class VaultReplaceManager {
   ) {}
 
   register(): void {
-    this.injectStyles();
     this.syncCommand();
   }
 
@@ -89,7 +84,6 @@ export class VaultReplaceManager {
       this.plugin.addCommand({
         id: VAULT_REPLACE_COMMAND_ID,
         name: "전체 파일 찾아 바꾸기",
-        hotkeys: [{ modifiers: ["Mod", "Shift"], key: "H" }],
         callback: () => {
           new VaultReplaceModal(this.plugin.app, this).open();
         },
@@ -104,14 +98,4 @@ export class VaultReplaceManager {
     this.registered = false;
   }
 
-  private injectStyles(): void {
-    document.getElementById(VAULT_REPLACE_STYLE_ID)?.remove();
-    const style = document.createElement("style");
-    style.id = VAULT_REPLACE_STYLE_ID;
-    style.textContent = VAULT_REPLACE_STYLES;
-    document.head.appendChild(style);
-    this.plugin.register(() => {
-      document.getElementById(VAULT_REPLACE_STYLE_ID)?.remove();
-    });
-  }
 }

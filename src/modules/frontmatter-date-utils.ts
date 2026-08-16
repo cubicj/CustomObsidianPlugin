@@ -23,7 +23,7 @@ export const DEFAULT_FRONTMATTER_DATE_SETTINGS: FrontmatterDateSettings = {
   createdField: "created",
   modifiedField: "modified",
   managedFolders: ["1. Inbox/", "2. Hubs/", "3. Resources/", "4. Daily Note/"],
-  excludedPaths: [".obsidian/", ".trash/", "Templates/", "Attached Files/", "cubicj-brewing/"],
+  excludedPaths: [".trash/", "Templates/", "Attached Files/", "cubicj-brewing/"],
 };
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;

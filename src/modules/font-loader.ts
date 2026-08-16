@@ -47,16 +47,13 @@ function getDefaultCss(fontFamily: string): string {
 
 function applyCss(css: string, id: string) {
   const existing = document.getElementById(id);
-  const style = document.createElement("style");
+  const style = document.head.createEl("style", { attr: { id } });
   style.textContent = css;
-  style.id = id;
-  document.head.appendChild(style);
   if (existing) existing.remove();
 }
 
 function removeCss(id: string) {
-  const el = document.getElementById(id);
-  if (el) el.remove();
+  document.getElementById(id)?.remove();
 }
 
 function getFontCacheFileName(fileName: string): string {
@@ -111,7 +108,8 @@ export class FontLoader {
         }
         try {
           await this.app.vault.adapter.remove(path);
-        } catch {
+        } catch (error) {
+          void error;
         }
       }
     }
@@ -140,7 +138,6 @@ export class FontLoader {
 }`;
 
     await this.app.vault.adapter.write(cssCachePath, fontFaceCss);
-    console.log("Font CSS saved: %s", cssCachePath);
   }
 
   async listFonts(fontFolder: string): Promise<string[]> {

@@ -294,8 +294,8 @@ export function remapFoldEntry(
   ) {
     return { action: "none" };
   }
-  const folds = record.folds as FoldRangeLike[];
-  const signatures = record.cubicjHeadings as HeadingSignature[];
+  const folds = record.folds;
+  const signatures = record.cubicjHeadings;
   const availableLines = new Map<string, number[]>();
   for (const heading of headings) {
     const key = headingKey(heading.level, heading.text);

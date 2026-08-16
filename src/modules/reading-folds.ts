@@ -86,7 +86,14 @@ export class ReadingFoldsManager {
     }
     const original = proto.set;
     this.originalSet = original;
-    const manager = this;
+    const preload = (
+      previewView: MarkdownPreviewView,
+      preview: MarkdownPreviewViewLike,
+      renderer: RendererLike,
+      data: unknown,
+    ): void => this.preload(previewView, preview, renderer, data);
+    const clearPending = (renderer: RendererLike): void =>
+      this.clearPending(renderer);
     const patchedSet: PreviewSet = function (data: unknown, clear: unknown) {
       original.call(this, data, clear);
       let renderer: RendererLike | null = null;
@@ -95,11 +102,11 @@ export class ReadingFoldsManager {
         if (typeof preview.renderer !== "object" || preview.renderer === null) {
           return;
         }
-        renderer = preview.renderer as RendererLike;
-        manager.preload(this, preview, renderer, data);
+        renderer = preview.renderer;
+        preload(this, preview, renderer, data);
       } catch {
         if (renderer) {
-          manager.clearPending(renderer);
+          clearPending(renderer);
         }
       }
     };
@@ -180,20 +187,25 @@ export class ReadingFoldsManager {
       return;
     }
     const originalParseFinish = renderer.parseFinish;
-    const manager = this;
+    const pendingEntries = this.pending;
+    const applyPlan = (planRenderer: RendererLike, lines: Set<number>): void =>
+      this.applyPlan(planRenderer, lines);
+    const clearPending = (pendingRenderer: RendererLike): void =>
+      this.clearPending(pendingRenderer);
     const patchedParseFinish: ParseFinish = function (...args: unknown[]) {
       try {
         const result = originalParseFinish.apply(this, args);
         try {
-          const current = manager.pending.get(renderer);
+          const current = pendingEntries.get(renderer);
           if (current && renderer.text === current.expectedText) {
-            manager.applyPlan(renderer, current.planLines);
+            applyPlan(renderer, current.planLines);
           }
-        } catch {
+        } catch (error) {
+          void error;
         }
         return result;
       } finally {
-        manager.clearPending(renderer);
+        clearPending(renderer);
       }
     };
     this.pending.set(renderer, {
@@ -245,7 +257,7 @@ export class ReadingFoldsManager {
       }
       const preview = view.previewMode as MarkdownPreviewViewLike;
       if (typeof preview.renderer === "object" && preview.renderer !== null) {
-        liveRenderers.add(preview.renderer as RendererLike);
+        liveRenderers.add(preview.renderer);
       }
     }
     for (const renderer of [...this.pending.keys()]) {
@@ -265,7 +277,8 @@ export class ReadingFoldsManager {
       if (renderer.parseFinish === pending.patchedParseFinish) {
         renderer.parseFinish = pending.originalParseFinish;
       }
-    } catch {
+    } catch (error) {
+      void error;
     }
   }
 }

@@ -11,16 +11,22 @@
     "watch": "node esbuild.config.mjs watch",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test && npm run build"
+    "lint": "eslint src/ tests/",
+    "lint:fix": "eslint src/ tests/ --fix",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build && node .github/scripts/verify-build.mjs"
   },
   "devDependencies": {
     "@codemirror/language": "^6.11.0",
     "@codemirror/state": "^6.5.0",
     "@codemirror/view": "^6.38.6",
+    "@eslint/js": "^10.0.1",
     "@types/node": "^20.0.0",
     "esbuild": "^0.28.1",
-    "obsidian": "^1.12.3",
-    "typescript": "^5.0.0"
+    "eslint": "^10.8.1",
+    "eslint-plugin-obsidianmd": "^0.4.1",
+    "obsidian": "^1.13.1",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.67.0"
   },
   "allowScripts": {
     "esbuild@0.28.1": true

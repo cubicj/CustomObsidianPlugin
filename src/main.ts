@@ -70,23 +70,36 @@ interface CubicJCoreSettings {
   sidebarCommands: SidebarCommandsSettings;
 }
 
-const DEFAULT_SETTINGS: CubicJCoreSettings = {
-  font: DEFAULT_FONT_SETTINGS,
-  frontmatterDates: DEFAULT_FRONTMATTER_DATE_SETTINGS,
-  noteFormat: DEFAULT_NOTE_FORMAT_SETTINGS,
-  eagerParse: DEFAULT_EAGER_PARSE_SETTINGS,
-  foldProperties: DEFAULT_FOLD_PROPERTIES_SETTINGS,
-  vaultReplace: DEFAULT_VAULT_REPLACE_SETTINGS,
-  stickyViewMode: DEFAULT_STICKY_VIEW_MODE_SETTINGS,
-  readingFolds: DEFAULT_READING_FOLDS_SETTINGS,
-  foldRemap: DEFAULT_FOLD_REMAP_SETTINGS,
-  readingBrackets: DEFAULT_READING_BRACKETS_SETTINGS,
-  noAltMultiCursor: DEFAULT_NO_ALT_MULTI_CURSOR_SETTINGS,
-  sidebarCommands: DEFAULT_SIDEBAR_COMMANDS_SETTINGS,
-};
+function createDefaultSettings(configDir: string): CubicJCoreSettings {
+  const normalizedConfigDir = configDir.endsWith("/") ? configDir : `${configDir}/`;
+  return {
+    font: DEFAULT_FONT_SETTINGS,
+    frontmatterDates: {
+      ...DEFAULT_FRONTMATTER_DATE_SETTINGS,
+      excludedPaths: [
+        normalizedConfigDir,
+        ...DEFAULT_FRONTMATTER_DATE_SETTINGS.excludedPaths,
+      ],
+    },
+    noteFormat: DEFAULT_NOTE_FORMAT_SETTINGS,
+    eagerParse: DEFAULT_EAGER_PARSE_SETTINGS,
+    foldProperties: DEFAULT_FOLD_PROPERTIES_SETTINGS,
+    vaultReplace: DEFAULT_VAULT_REPLACE_SETTINGS,
+    stickyViewMode: DEFAULT_STICKY_VIEW_MODE_SETTINGS,
+    readingFolds: DEFAULT_READING_FOLDS_SETTINGS,
+    foldRemap: DEFAULT_FOLD_REMAP_SETTINGS,
+    readingBrackets: DEFAULT_READING_BRACKETS_SETTINGS,
+    noAltMultiCursor: DEFAULT_NO_ALT_MULTI_CURSOR_SETTINGS,
+    sidebarCommands: DEFAULT_SIDEBAR_COMMANDS_SETTINGS,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export default class CubicJCorePlugin extends Plugin {
-  settings!: CubicJCoreSettings;
+  declare settings: CubicJCoreSettings;
   fontLoader!: FontLoader;
   frontmatterDates!: FrontmatterDateManager;
   foldProperties!: FoldPropertiesManager;
@@ -144,22 +157,32 @@ export default class CubicJCorePlugin extends Plugin {
       createNoAltMultiCursorExtension(() => this.settings.noAltMultiCursor),
     );
     this.addSettingTab(new CubicJCoreSettingTab(this.app, this));
-    console.log("CubicJ Core loaded");
   }
 
   onunload() {
     void this.frontmatterDates?.flushPendingModifiedWrite().catch((error) => {
       console.warn("CubicJ Core failed to flush pending frontmatter date", error);
     });
-    console.log("CubicJ Core unloaded");
   }
 
   async loadSettings() {
-    const data = (await this.loadData()) as Record<string, unknown> | null;
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+    const loaded: unknown = await this.loadData();
+    const data = isRecord(loaded) ? loaded : null;
+    const defaults = createDefaultSettings(this.app.vault.configDir);
+    this.settings = Object.assign({}, defaults, data);
     const settings = this.settings as unknown as Record<string, Record<string, unknown>>;
-    for (const [key, defaults] of Object.entries(DEFAULT_SETTINGS)) {
+    const defaultSettings = defaults as unknown as Record<
+      string,
+      Record<string, unknown>
+    >;
+    for (const [key, defaults] of Object.entries(defaultSettings)) {
       settings[key] = Object.assign({}, defaults, settings[key]);
+    }
+    const normalizedConfigDir = this.app.vault.configDir.endsWith("/")
+      ? this.app.vault.configDir
+      : `${this.app.vault.configDir}/`;
+    if (!this.settings.frontmatterDates.excludedPaths.includes(normalizedConfigDir)) {
+      this.settings.frontmatterDates.excludedPaths.unshift(normalizedConfigDir);
     }
     const legacyDates = data?.frontmatterDates as { normalizeTrailingNewline?: unknown } | undefined;
     if (data?.noteFormat === undefined && typeof legacyDates?.normalizeTrailingNewline === "boolean") {

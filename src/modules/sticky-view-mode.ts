@@ -33,18 +33,19 @@ export class StickyViewModeManager {
     }
     const original = proto.setViewState;
     this.originalSetViewState = original;
-    const manager = this;
+    const snapshots = this.snapshots;
+    const getSettings = this.getSettings;
     const patchedSetViewState: SetViewState = function (
       viewState: unknown,
       eState?: unknown,
     ) {
       const decision = decideStickyViewMode(
         viewState,
-        manager.snapshots.get(this) ?? null,
-        manager.getSettings().enabled,
+        snapshots.get(this) ?? null,
+        getSettings().enabled,
       );
       if (decision.action === "record") {
-        manager.snapshots.set(this, decision.snapshot);
+        snapshots.set(this, decision.snapshot);
       } else if (decision.action === "coerce") {
         const state = (viewState as { state: Record<string, unknown> }).state;
         state.mode = decision.snapshot.mode;

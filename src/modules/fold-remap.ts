@@ -85,12 +85,13 @@ export class FoldRemapManager {
     this.disposed = false;
     const originalSave = foldManager.save;
     this.originalSave = originalSave;
-    const manager = this;
+    const enrich = (file: TFile | null, info: unknown): unknown =>
+      this.enrich(file, info);
     const patchedSave: FoldManagerSave = function (
       file: TFile | null,
       info: unknown,
     ) {
-      return originalSave.call(foldManager, file, manager.enrich(file, info));
+      return originalSave.call(foldManager, file, enrich(file, info));
     };
     this.patchedSave = patchedSave;
     foldManager.save = patchedSave;
