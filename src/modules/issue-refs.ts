@@ -2,17 +2,26 @@ import { syntaxTree } from "@codemirror/language";
 import type { Extension, Range } from "@codemirror/state";
 import { Decoration, ViewPlugin } from "@codemirror/view";
 import type { DecorationSet, EditorView, ViewUpdate } from "@codemirror/view";
-import { Plugin } from "obsidian";
+import { MarkdownView, Plugin } from "obsidian";
 import {
+  deriveIssueReferencePrecedingCharacter,
   findIssueReferences,
+  isIssueReferenceCodeBlockSyntaxNode,
   isIssueReferenceExcludedReadingElement,
   isIssueReferenceExcludedSyntaxNode,
+  shouldSuppressIssueReferenceClickableToken,
 } from "./issue-refs-utils";
 
 const ISSUE_REFERENCE_CLASS = "cubicj-issue-ref";
 const ISSUE_REFERENCE_TAIL_CLASS = "cubicj-issue-ref-tail";
 const issueReferenceMark = Decoration.mark({ class: ISSUE_REFERENCE_CLASS });
 const issueReferenceTailMark = Decoration.mark({ class: ISSUE_REFERENCE_TAIL_CLASS });
+
+type GetClickableTokenAt = (this: object, position: unknown) => unknown;
+
+interface ClickableTokenPrototype {
+  getClickableTokenAt?: GetClickableTokenAt;
+}
 
 interface ObsidianWindow extends Window {
   createFragment(): DocumentFragment;
@@ -25,6 +34,22 @@ interface ObsidianDocument extends Document {
 
 function getObsidianWindow(document: Document): ObsidianWindow {
   return (document as ObsidianDocument).win;
+}
+
+function findClickableTokenPrototype(
+  editor: object,
+): ClickableTokenPrototype | null {
+  let prototype = Object.getPrototypeOf(editor) as ClickableTokenPrototype | null;
+  while (prototype !== null && prototype !== Object.prototype) {
+    if (
+      Object.prototype.hasOwnProperty.call(prototype, "getClickableTokenAt") &&
+      typeof prototype.getClickableTokenAt === "function"
+    ) {
+      return prototype;
+    }
+    prototype = Object.getPrototypeOf(prototype) as ClickableTokenPrototype | null;
+  }
+  return null;
 }
 
 function rangeHasExcludedSyntax(
@@ -46,6 +71,25 @@ function rangeHasExcludedSyntax(
   return excluded;
 }
 
+function lineHasCodeBlockSyntax(
+  tree: ReturnType<typeof syntaxTree>,
+  from: number,
+  to: number,
+): boolean {
+  let codeBlock = false;
+  tree.iterate({
+    from,
+    to,
+    enter(node) {
+      if (isIssueReferenceCodeBlockSyntaxNode(node.name)) {
+        codeBlock = true;
+        return false;
+      }
+    },
+  });
+  return codeBlock;
+}
+
 function buildIssueReferenceDecorations(
   view: EditorView,
   tree: ReturnType<typeof syntaxTree>,
@@ -59,7 +103,11 @@ function buildIssueReferenceDecorations(
     for (;;) {
       if (!visitedLines.has(line.number)) {
         visitedLines.add(line.number);
+        const codeBlock = lineHasCodeBlockSyntax(tree, line.from, line.to);
         for (const reference of findIssueReferences(line.text)) {
+          if (codeBlock) {
+            continue;
+          }
           const from = line.from + reference.from;
           const to = line.from + reference.to;
           const contextTo =
@@ -123,6 +171,10 @@ function collectDigitLedTagAnchors(root: HTMLElement): HTMLAnchorElement[] {
       return;
     }
     const element = node as Element;
+    if (element.tagName === "A" && element.classList.contains("tag")) {
+      anchors.push(element as HTMLAnchorElement);
+      return;
+    }
     if (
       element.namespaceURI !== "http://www.w3.org/1999/xhtml" ||
       isIssueReferenceExcludedReadingElement(
@@ -130,10 +182,6 @@ function collectDigitLedTagAnchors(root: HTMLElement): HTMLAnchorElement[] {
         Array.from(element.classList),
       )
     ) {
-      return;
-    }
-    if (element.tagName === "A" && element.classList.contains("tag")) {
-      anchors.push(element as HTMLAnchorElement);
       return;
     }
     for (const child of Array.from(element.childNodes)) {
@@ -200,7 +248,10 @@ function collectIssueReferenceTextNodes(root: HTMLElement): Text[] {
 
 function decorateIssueReferenceTextNode(node: Text): void {
   const source = node.data;
-  const references = findIssueReferences(source);
+  const references = findIssueReferences(
+    source,
+    deriveIssueReferencePrecedingCharacter(node),
+  );
   if (references.length === 0) {
     return;
   }
@@ -236,11 +287,69 @@ function decorateReadingIssueReferences(root: HTMLElement): void {
 }
 
 export class IssueRefsManager {
+  private disposed = false;
+  private clickableTokenPrototype: ClickableTokenPrototype | null = null;
+  private originalGetClickableTokenAt: GetClickableTokenAt | null = null;
+  private patchedGetClickableTokenAt: GetClickableTokenAt | null = null;
+
   constructor(private plugin: Plugin) {}
 
   register(): void {
     this.plugin.registerMarkdownPostProcessor((element) => {
       decorateReadingIssueReferences(element);
     });
+    this.plugin.register(() => {
+      this.disposed = true;
+      const prototype = this.clickableTokenPrototype;
+      if (
+        prototype &&
+        this.originalGetClickableTokenAt &&
+        this.patchedGetClickableTokenAt &&
+        prototype.getClickableTokenAt === this.patchedGetClickableTokenAt
+      ) {
+        prototype.getClickableTokenAt = this.originalGetClickableTokenAt;
+      }
+      this.clickableTokenPrototype = null;
+      this.originalGetClickableTokenAt = null;
+      this.patchedGetClickableTokenAt = null;
+    });
+    this.plugin.app.workspace.onLayoutReady(() => {
+      if (this.disposed) {
+        return;
+      }
+      this.installClickableTokenPatch();
+      this.plugin.registerEvent(
+        this.plugin.app.workspace.on("layout-change", () => {
+          this.installClickableTokenPatch();
+        }),
+      );
+    });
+  }
+
+  private installClickableTokenPatch(): void {
+    if (this.disposed || this.patchedGetClickableTokenAt !== null) {
+      return;
+    }
+    for (const leaf of this.plugin.app.workspace.getLeavesOfType("markdown")) {
+      if (!(leaf.view instanceof MarkdownView)) {
+        continue;
+      }
+      const prototype = findClickableTokenPrototype(
+        leaf.view.editor,
+      );
+      const original = prototype?.getClickableTokenAt;
+      if (!prototype || typeof original !== "function") {
+        continue;
+      }
+      const patched: GetClickableTokenAt = function (position: unknown) {
+        const token = original.call(this, position);
+        return shouldSuppressIssueReferenceClickableToken(token) ? null : token;
+      };
+      this.clickableTokenPrototype = prototype;
+      this.originalGetClickableTokenAt = original;
+      this.patchedGetClickableTokenAt = patched;
+      prototype.getClickableTokenAt = patched;
+      return;
+    }
   }
 }
