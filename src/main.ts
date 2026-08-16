@@ -43,6 +43,7 @@ import {
 } from "./modules/reading-brackets";
 import type { ReadingBracketsSettings } from "./modules/reading-brackets";
 import { ReadingListBlankLinesManager } from "./modules/reading-list-blank-lines";
+import { createIssueRefsExtension, IssueRefsManager } from "./modules/issue-refs";
 import {
   createNoAltMultiCursorExtension,
   DEFAULT_NO_ALT_MULTI_CURSOR_SETTINGS,
@@ -109,6 +110,7 @@ export default class CubicJCorePlugin extends Plugin {
   foldRemap!: FoldRemapManager;
   readingBrackets!: ReadingBracketsManager;
   readingListBlankLines!: ReadingListBlankLinesManager;
+  issueRefs!: IssueRefsManager;
   sidebarCommands!: SidebarCommandsManager;
 
   async onload() {
@@ -148,11 +150,15 @@ export default class CubicJCorePlugin extends Plugin {
     this.readingListBlankLines = new ReadingListBlankLinesManager(this);
     this.readingListBlankLines.register();
 
+    this.issueRefs = new IssueRefsManager(this);
+    this.issueRefs.register();
+
     this.sidebarCommands = new SidebarCommandsManager(this, () => this.settings.sidebarCommands);
     this.sidebarCommands.register();
 
     this.registerEditorExtension(createHeadingEnterExtension(() => this.settings.noteFormat));
     this.registerEditorExtension(createEagerParseExtension(() => this.settings.eagerParse));
+    this.registerEditorExtension(createIssueRefsExtension());
     this.registerEditorExtension(
       createNoAltMultiCursorExtension(() => this.settings.noAltMultiCursor),
     );
